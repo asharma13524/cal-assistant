@@ -3,7 +3,7 @@
     "lib": [
       "dom",
       "dom.iterable",
-      "es6"
+      "ES2017"
     ],
     "allowJs": true,
     "skipLibCheck": true,

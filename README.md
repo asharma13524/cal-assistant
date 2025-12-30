@@ -7,8 +7,7 @@ AI-powered calendar management and scheduling assistant built for a take-home as
 - 🔐 Google OAuth integration for calendar access
 - 📅 Clean calendar view and event management
 - 🤖 AI chat interface powered by Claude
-- 📧 Email drafting for scheduling
-- 💬 Multi-turn conversations with context
+- 🌓 Light/dark mode support
 
 ## Tech Stack
 
@@ -20,67 +19,75 @@ AI-powered calendar management and scheduling assistant built for a take-home as
 
 1. **Install dependencies**:
    ```bash
-   npm install
+   pnpm install
    ```
 
 2. **Set up environment variables**:
+
+   Create a `.env.local` file with:
    ```bash
-   cp .env.example .env.local
-   ```
-   Fill in your actual API keys and configuration.
+   # Google OAuth credentials
+   # Get these from Google Cloud Console: https://console.cloud.google.com/apis/credentials
+   GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=your-client-secret
 
-3. **Run the development server**:
+   # Anthropic API key for Claude
+   ANTHROPIC_API_KEY=sk-ant-...
+
+   # App URL (no trailing slash)
+   NEXT_PUBLIC_APP_URL=http://localhost:3000
+   ```
+
+3. **Configure Google OAuth**:
+   - Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   - Create OAuth 2.0 credentials (Web application)
+   - Add authorized redirect URI: `http://localhost:3000/api/auth/google/callback`
+   - Enable the Google Calendar API
+
+4. **Run the development server**:
    ```bash
-   npm run dev
+   pnpm dev
    ```
 
-4. **Open [http://localhost:3000](http://localhost:3000)** in your browser.
-
-## Environment Variables
-
-- `GOOGLE_CLIENT_ID` - Google OAuth client ID
-- `GOOGLE_CLIENT_SECRET` - Google OAuth client secret
-- `ANTHROPIC_API_KEY` - Anthropic API key for Claude
-- `NEXTAUTH_URL` - Application URL
-- `NEXTAUTH_SECRET` - NextAuth secret for session encryption
+5. **Open [http://localhost:3000](http://localhost:3000)** in your browser.
 
 ## Project Structure
 
 ```
 ├── app/                    # Next.js App Router pages
+│   ├── api/auth/          # Auth API routes
 │   ├── calendar/          # Calendar view page
-│   ├── chat/              # AI chat interface
-│   └── auth/              # Authentication pages
+│   └── page.tsx           # Sign-in page (root)
 ├── components/            # Reusable UI components
 │   ├── ui/                # Generic UI components
 │   ├── calendar/          # Calendar-specific components
-│   └── chat/              # Chat-specific components
-├── lib/                   # Utility libraries and configurations
-│   ├── auth/              # Authentication utilities
-│   ├── google/            # Google Calendar API integration
+│   └── chat/              # Chat widget
+├── lib/                   # Utility libraries
+│   ├── auth/              # Session management
+│   ├── google/            # Google OAuth & Calendar API
 │   ├── anthropic/         # Claude API integration
 │   └── types/             # TypeScript type definitions
 ├── hooks/                 # Custom React hooks
 └── providers/             # Context providers
 ```
 
+## Auth Flow
+
+1. User clicks "Continue with Google" on the sign-in page
+2. Redirected to `/api/auth/google` which initiates OAuth
+3. Google consent screen shown
+4. Callback to `/api/auth/google/callback` exchanges code for tokens
+5. Session stored in HTTP-only cookies
+6. User redirected to `/calendar`
+
 ## Development Status
 
-This is the initial scaffold with:
-- ✅ Basic project setup and configuration
-- ✅ Clean folder structure (feature-based)
-- ✅ Environment variable setup
-- ✅ Basic layout with navigation
-- ✅ Placeholder pages for calendar and chat
-- ⏳ Google OAuth integration (pending)
-- ⏳ Calendar API integration (pending)
-- ⏳ AI chat implementation (pending)
-
-## Next Steps
-
-1. Implement Google OAuth with NextAuth.js
-2. Add Google Calendar API integration
-3. Build calendar view component
-4. Implement Claude AI chat interface with tool use
-5. Add email drafting functionality
-6. Deploy to Vercel
+- ✅ Project scaffold with Next.js 16
+- ✅ Google OAuth integration
+- ✅ Session management with cookies
+- ✅ Clean calendar UI with month navigation
+- ✅ Chat widget (collapsed by default)
+- ✅ Light/dark mode toggle
+- ⏳ Google Calendar API data fetching
+- ⏳ AI chat with Claude tool use
+- ⏳ Event creation/modification
