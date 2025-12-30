@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAnthropicClient } from '@/lib/anthropic/client'
 import { calendarTools, SYSTEM_PROMPT } from '@/lib/anthropic/tools'
 import { getValidAccessToken, getSession } from '@/lib/auth/session'
-import { getCalendarEvents, getCalendarStats, createCalendarEvent } from '@/lib/google/calendar'
+import { getCalendarEvents, getCalendarStats, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, addEventAttendee, removeEventAttendee } from '@/lib/google/calendar'
 import { CLAUDE_MODEL, CLAUDE_MAX_TOKENS } from '@/lib/constants'
 import type { MessageParam, ContentBlock, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages'
 
@@ -11,11 +11,16 @@ interface ChatRequest {
   history?: { role: 'user' | 'assistant'; content: string }[]
 }
 
+interface ToolExecutionResult {
+  content: string
+  modifiedEvents: boolean
+}
+
 async function executeToolCall(
   toolName: string,
   toolInput: Record<string, unknown>,
   accessToken: string
-): Promise<string> {
+): Promise<ToolExecutionResult> {
   try {
     switch (toolName) {
       case 'get_calendar_events': {
@@ -29,31 +34,40 @@ async function executeToolCall(
         const events = await getCalendarEvents(accessToken, startDate, endDate)
 
         if (events.length === 0) {
-          return 'No events found in the specified date range.'
+          return {
+            content: 'No events found in the specified date range.',
+            modifiedEvents: false,
+          }
         }
 
         const eventSummaries = events.map((e) => {
           if (!e.start.dateTime || !e.end.dateTime) {
             // All-day event
-            return `- ${e.summary} (All day)${e.attendees?.length ? ` with ${e.attendees.length} attendee(s)` : ''}`
+            return `- ${e.summary} (All day)${e.attendees?.length ? ` with ${e.attendees.length} attendee(s)` : ''} [ID: ${e.id}]`
           }
           const start = new Date(e.start.dateTime)
           const end = new Date(e.end.dateTime)
           const attendeeList = e.attendees?.map((a) => a.displayName || a.email).join(', ')
-          return `- ${e.summary} on ${start.toLocaleDateString()} from ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} to ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${attendeeList ? ` with ${attendeeList}` : ''}`
+          return `- ${e.summary} on ${start.toLocaleDateString()} from ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} to ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${attendeeList ? ` with ${attendeeList}` : ''} [ID: ${e.id}]`
         })
 
-        return `Found ${events.length} events:\n${eventSummaries.join('\n')}`
+        return {
+          content: `Found ${events.length} events:\n${eventSummaries.join('\n')}\n\nNote: Use the event ID to update, delete, or manage attendees.`,
+          modifiedEvents: false,
+        }
       }
 
       case 'get_calendar_stats': {
         const stats = await getCalendarStats(accessToken)
-        return `Calendar Statistics (This Week):
+        return {
+          content: `Calendar Statistics (This Week):
 - Total meetings: ${stats.totalEvents}
 - Total meeting time: ${stats.totalMeetingHours} hours
 - Average meetings per day: ${stats.averageMeetingsPerDay}
 - Meeting time by day: ${Object.entries(stats.meetingsByDay).map(([day, mins]) => `${day}: ${Math.round(mins / 60 * 10) / 10}h`).join(', ')}
-- Most frequent attendees: ${stats.topAttendees.map((a) => `${a.email} (${a.meetingCount} meetings)`).join(', ') || 'None'}`
+- Most frequent attendees: ${stats.topAttendees.map((a) => `${a.email} (${a.meetingCount} meetings)`).join(', ') || 'None'}`,
+          modifiedEvents: false,
+        }
       }
 
       case 'create_calendar_event': {
@@ -73,7 +87,68 @@ async function executeToolCall(
         })
 
         const eventDate = event.start.dateTime ? new Date(event.start.dateTime).toLocaleString() : 'scheduled'
-        return `✅ Event created: "${event.summary}" on ${eventDate}${event.htmlLink ? `\nView in Google Calendar: ${event.htmlLink}` : ''}`
+        return {
+          content: `✅ Event created: "${event.summary}" on ${eventDate}${event.htmlLink ? `\nView in Google Calendar: ${event.htmlLink}` : ''}`,
+          modifiedEvents: true,
+        }
+      }
+
+      case 'update_calendar_event': {
+        const updateData: any = {
+          eventId: toolInput.event_id as string,
+        }
+
+        if (toolInput.title) updateData.summary = toolInput.title as string
+        if (toolInput.description !== undefined) updateData.description = toolInput.description as string
+        if (toolInput.location !== undefined) updateData.location = toolInput.location as string
+        if (toolInput.start_time) {
+          updateData.start = {
+            dateTime: toolInput.start_time as string,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }
+        }
+        if (toolInput.end_time) {
+          updateData.end = {
+            dateTime: toolInput.end_time as string,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }
+        }
+
+        const updatedEvent = await updateCalendarEvent(accessToken, updateData)
+        const updatedDate = updatedEvent.start.dateTime ? new Date(updatedEvent.start.dateTime).toLocaleString() : 'scheduled'
+        return {
+          content: `✅ Event updated: "${updatedEvent.summary}" on ${updatedDate}${updatedEvent.htmlLink ? `\nView in Google Calendar: ${updatedEvent.htmlLink}` : ''}`,
+          modifiedEvents: true,
+        }
+      }
+
+      case 'delete_calendar_event': {
+        const eventId = toolInput.event_id as string
+        await deleteCalendarEvent(accessToken, eventId)
+        return {
+          content: `✅ Event deleted successfully (ID: ${eventId})`,
+          modifiedEvents: true,
+        }
+      }
+
+      case 'add_attendee': {
+        const eventId = toolInput.event_id as string
+        const email = toolInput.email as string
+        const updatedEvent = await addEventAttendee(accessToken, eventId, email)
+        return {
+          content: `✅ Added ${email} to "${updatedEvent.summary}". Current attendees: ${updatedEvent.attendees?.map(a => a.email).join(', ') || 'none'}${updatedEvent.htmlLink ? `\nView in Google Calendar: ${updatedEvent.htmlLink}` : ''}`,
+          modifiedEvents: true,
+        }
+      }
+
+      case 'remove_attendee': {
+        const eventId = toolInput.event_id as string
+        const email = toolInput.email as string
+        const updatedEvent = await removeEventAttendee(accessToken, eventId, email)
+        return {
+          content: `✅ Removed ${email} from "${updatedEvent.summary}". Current attendees: ${updatedEvent.attendees?.map(a => a.email).join(', ') || 'none'}${updatedEvent.htmlLink ? `\nView in Google Calendar: ${updatedEvent.htmlLink}` : ''}`,
+          modifiedEvents: true,
+        }
       }
 
       case 'draft_email': {
@@ -83,7 +158,8 @@ async function executeToolCall(
         const tone = (toolInput.tone as string) || 'friendly'
 
         // Return a structured email draft
-        return `📧 **Email Draft**
+        return {
+          content: `📧 **Email Draft**
 
 **To:** ${recipients.join(', ')}
 **Subject:** ${subject}
@@ -93,15 +169,23 @@ async function executeToolCall(
 ${generateEmailBody(context, tone, recipients)}
 
 ---
-*This is a draft. Copy and send via your email client.*`
+*This is a draft. Copy and send via your email client.*`,
+          modifiedEvents: false,
+        }
       }
 
       default:
-        return `Unknown tool: ${toolName}`
+        return {
+          content: `Unknown tool: ${toolName}`,
+          modifiedEvents: false,
+        }
     }
   } catch (error) {
     console.error(`[Chat] Error executing tool ${toolName}:`, error)
-    return `Error executing ${toolName}: ${error instanceof Error ? error.message : 'Unknown error'}`
+    return {
+      content: `Error executing ${toolName}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      modifiedEvents: false,
+    }
   }
 }
 
@@ -160,6 +244,8 @@ export async function POST(request: NextRequest) {
     })
 
     // Handle tool use in a loop
+    let eventsWereModified = false
+
     while (response.stop_reason === 'tool_use') {
       const toolUseBlocks = response.content.filter(
         (block): block is Extract<ContentBlock, { type: 'tool_use' }> => block.type === 'tool_use'
@@ -169,6 +255,8 @@ export async function POST(request: NextRequest) {
 
       // Execute tools individually to handle errors gracefully
       const toolResults: ToolResultBlockParam[] = []
+      let anyToolModifiedEvents = false
+
       for (const toolUse of toolUseBlocks) {
         try {
           const result = await executeToolCall(
@@ -176,10 +264,16 @@ export async function POST(request: NextRequest) {
             toolUse.input as Record<string, unknown>,
             accessToken
           )
+
+          // Track if any tool modified events
+          if (result.modifiedEvents) {
+            anyToolModifiedEvents = true
+          }
+
           toolResults.push({
             type: 'tool_result' as const,
             tool_use_id: toolUse.id,
-            content: result,
+            content: result.content,
           })
         } catch (error) {
           console.error(`[Chat API] Tool execution failed for ${toolUse.name}:`, error)
@@ -190,6 +284,11 @@ export async function POST(request: NextRequest) {
             is_error: true,
           })
         }
+      }
+
+      // Track across all tool execution loops
+      if (anyToolModifiedEvents) {
+        eventsWereModified = true
       }
 
       // Continue conversation with tool results
@@ -214,6 +313,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       response: textContent?.text || 'I apologize, but I was unable to generate a response.',
+      metadata: {
+        modifiedEvents: eventsWereModified,
+      },
     })
   } catch (error) {
     console.error('[Chat API] Error:', error)

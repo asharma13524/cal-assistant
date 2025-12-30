@@ -4,8 +4,9 @@ import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChatWidget } from '@/components/chat/ChatWidget'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { EventDetailModal } from '@/components/calendar/EventDetailModal'
 import { useAuth } from '@/hooks/useAuth'
-import { useCalendarEvents } from '@/hooks/useCalendarEvents'
+import { useCalendarEventsSWR } from '@/hooks/useCalendarEventsSWR'
 import type { CalendarEvent } from '@/lib/types/calendar'
 
 // Generate calendar days for current month
@@ -41,12 +42,15 @@ function formatTime(dateString: string | undefined) {
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
-function EventCard({ event }: { event: CalendarEvent }) {
+function EventCard({ event, onClick }: { event: CalendarEvent; onClick: () => void }) {
   const startTime = formatTime(event.start.dateTime)
   const endTime = formatTime(event.end.dateTime)
 
   return (
-    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500 rounded-r-lg">
+    <button
+      onClick={onClick}
+      className="w-full text-left p-3 bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500 rounded-r-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors cursor-pointer"
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <h4 className="font-medium text-sm text-zinc-900 dark:text-white truncate">
@@ -66,20 +70,11 @@ function EventCard({ event }: { event: CalendarEvent }) {
             </p>
           )}
         </div>
-        {event.htmlLink && (
-          <a
-            href={event.htmlLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 shrink-0"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </a>
-        )}
+        <svg className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -91,6 +86,8 @@ export default function Calendar() {
   const [currentMonth, setCurrentMonth] = useState(today.getMonth())
   const [currentYear, setCurrentYear] = useState(today.getFullYear())
   const [selectedDate, setSelectedDate] = useState<number | null>(today.getDate())
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   const days = getCalendarDays(currentYear, currentMonth)
 
@@ -106,7 +103,7 @@ export default function Calendar() {
     return date
   }, [currentYear, currentMonth])
 
-  const { events, isLoading: eventsLoading, refetch } = useCalendarEvents({
+  const { events, isLoading: eventsLoading } = useCalendarEventsSWR({
     timeMin,
     timeMax,
   })
@@ -150,12 +147,15 @@ export default function Calendar() {
     }
   }, [isAuthenticated, authLoading, router])
 
-  // Refetch events when month changes
-  useEffect(() => {
-    if (isAuthenticated) {
-      refetch()
-    }
-  }, [currentMonth, currentYear, isAuthenticated, refetch])
+  const handleEventClick = (event: CalendarEvent) => {
+    setSelectedEvent(event)
+    setIsModalOpen(true)
+  }
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false)
+    setSelectedEvent(null)
+  }
 
   const prevMonth = () => {
     if (currentMonth === 0) {
@@ -372,7 +372,7 @@ export default function Calendar() {
                 selectedEvents.length > 0 ? (
                   <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto">
                     {selectedEvents.map((event) => (
-                      <EventCard key={event.id} event={event} />
+                      <EventCard key={event.id} event={event} onClick={() => handleEventClick(event)} />
                     ))}
                   </div>
                 ) : (
@@ -398,6 +398,13 @@ export default function Calendar() {
 
       {/* Chat Widget */}
       <ChatWidget />
+
+      {/* Event Detail Modal */}
+      <EventDetailModal
+        event={selectedEvent}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+      />
     </div>
   )
 }

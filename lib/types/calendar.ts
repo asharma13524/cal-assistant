@@ -38,3 +38,26 @@ export interface CreateEventData {
   }>
   location?: string
 }
+
+export interface UpdateEventData {
+  eventId: string
+  summary?: string
+  description?: string
+  start?: {
+    dateTime: string
+    timeZone?: string
+  }
+  end?: {
+    dateTime: string
+    timeZone?: string
+  }
+  attendees?: Array<{
+    email: string
+  }>
+  location?: string
+}
+
+export interface AttendeeOperation {
+  eventId: string
+  email: string
+}

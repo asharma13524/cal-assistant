@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useSWRConfig } from 'swr'
 
 interface Message {
   id: string
@@ -9,6 +10,7 @@ interface Message {
 }
 
 export function ChatWidget() {
+  const { mutate } = useSWRConfig()
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -59,6 +61,13 @@ export function ChatWidget() {
         content: data.response
       }
       setMessages(prev => [...prev, assistantMessage])
+
+      // Trigger cache revalidation if events were modified
+      if (data.metadata?.modifiedEvents) {
+        console.log('[ChatWidget] Events modified, invalidating cache')
+        // Revalidate all calendar event caches
+        mutate((key) => typeof key === 'string' && key.startsWith('/api/calendar/events'))
+      }
     } catch (error) {
       console.error('Chat error:', error)
       const errorMessage: Message = {
@@ -75,7 +84,7 @@ export function ChatWidget() {
   const suggestedQuestions = [
     "What meetings do I have this week?",
     "How much time am I spending in meetings?",
-    "Draft an email to schedule a meeting",
+    "Schedule a team meeting for tomorrow at 2pm",
   ]
 
   return (

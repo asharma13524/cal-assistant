@@ -1,7 +1,7 @@
 import { google } from 'googleapis'
 import { getAuthenticatedClient } from './oauth'
 import { DEFAULT_EVENT_RANGE_DAYS, DEFAULT_MAX_RESULTS, STATS_MAX_RESULTS } from '@/lib/constants'
-import type { CalendarEvent, CreateEventData } from '@/lib/types/calendar'
+import type { CalendarEvent, CreateEventData, UpdateEventData } from '@/lib/types/calendar'
 
 export async function getCalendarEvents(
   accessToken: string,
@@ -148,6 +148,184 @@ export async function getCalendarStats(accessToken: string) {
       .slice(0, 5)
       .map(([email, count]) => ({ email, meetingCount: count })),
     averageMeetingsPerDay: Math.round(events.length / 7 * 10) / 10,
+  }
+}
+
+export async function updateCalendarEvent(
+  accessToken: string,
+  eventData: UpdateEventData
+): Promise<CalendarEvent> {
+  const auth = getAuthenticatedClient(accessToken)
+  const calendar = google.calendar({ version: 'v3', auth })
+
+  const updateBody: any = {}
+  if (eventData.summary !== undefined) updateBody.summary = eventData.summary
+  if (eventData.description !== undefined) updateBody.description = eventData.description
+  if (eventData.start !== undefined) updateBody.start = eventData.start
+  if (eventData.end !== undefined) updateBody.end = eventData.end
+  if (eventData.attendees !== undefined) updateBody.attendees = eventData.attendees
+  if (eventData.location !== undefined) updateBody.location = eventData.location
+
+  const response = await calendar.events.patch({
+    calendarId: 'primary',
+    eventId: eventData.eventId,
+    requestBody: updateBody,
+  })
+
+  const event = response.data
+
+  return {
+    id: event.id || '',
+    summary: event.summary || '',
+    description: event.description || undefined,
+    start: {
+      dateTime: event.start?.dateTime || event.start?.date || '',
+      timeZone: event.start?.timeZone || undefined,
+    },
+    end: {
+      dateTime: event.end?.dateTime || event.end?.date || '',
+      timeZone: event.end?.timeZone || undefined,
+    },
+    attendees: event.attendees?.map((a) => ({
+      email: a.email || '',
+      displayName: a.displayName || undefined,
+      responseStatus: a.responseStatus as 'accepted' | 'declined' | 'tentative' | 'needsAction' | undefined,
+    })),
+    location: event.location || undefined,
+    status: event.status as CalendarEvent['status'],
+    htmlLink: event.htmlLink || undefined,
+  }
+}
+
+export async function deleteCalendarEvent(
+  accessToken: string,
+  eventId: string
+): Promise<void> {
+  const auth = getAuthenticatedClient(accessToken)
+  const calendar = google.calendar({ version: 'v3', auth })
+
+  await calendar.events.delete({
+    calendarId: 'primary',
+    eventId,
+  })
+}
+
+export async function addEventAttendee(
+  accessToken: string,
+  eventId: string,
+  email: string
+): Promise<CalendarEvent> {
+  const auth = getAuthenticatedClient(accessToken)
+  const calendar = google.calendar({ version: 'v3', auth })
+
+  // Get the current event
+  const getResponse = await calendar.events.get({
+    calendarId: 'primary',
+    eventId,
+  })
+
+  const currentEvent = getResponse.data
+  const currentAttendees = currentEvent.attendees || []
+
+  // Check if attendee already exists
+  const attendeeExists = currentAttendees.some((a) => a.email === email)
+  if (attendeeExists) {
+    throw new Error(`Attendee ${email} is already invited to this event`)
+  }
+
+  // Add the new attendee
+  const updatedAttendees = [...currentAttendees, { email }]
+
+  // Update the event
+  const updateResponse = await calendar.events.patch({
+    calendarId: 'primary',
+    eventId,
+    requestBody: {
+      attendees: updatedAttendees,
+    },
+  })
+
+  const event = updateResponse.data
+
+  return {
+    id: event.id || '',
+    summary: event.summary || '',
+    description: event.description || undefined,
+    start: {
+      dateTime: event.start?.dateTime || event.start?.date || '',
+      timeZone: event.start?.timeZone || undefined,
+    },
+    end: {
+      dateTime: event.end?.dateTime || event.end?.date || '',
+      timeZone: event.end?.timeZone || undefined,
+    },
+    attendees: event.attendees?.map((a) => ({
+      email: a.email || '',
+      displayName: a.displayName || undefined,
+      responseStatus: a.responseStatus as 'accepted' | 'declined' | 'tentative' | 'needsAction' | undefined,
+    })),
+    location: event.location || undefined,
+    status: event.status as CalendarEvent['status'],
+    htmlLink: event.htmlLink || undefined,
+  }
+}
+
+export async function removeEventAttendee(
+  accessToken: string,
+  eventId: string,
+  email: string
+): Promise<CalendarEvent> {
+  const auth = getAuthenticatedClient(accessToken)
+  const calendar = google.calendar({ version: 'v3', auth })
+
+  // Get the current event
+  const getResponse = await calendar.events.get({
+    calendarId: 'primary',
+    eventId,
+  })
+
+  const currentEvent = getResponse.data
+  const currentAttendees = currentEvent.attendees || []
+
+  // Filter out the attendee
+  const updatedAttendees = currentAttendees.filter((a) => a.email !== email)
+
+  // Check if attendee was actually removed
+  if (updatedAttendees.length === currentAttendees.length) {
+    throw new Error(`Attendee ${email} not found in this event`)
+  }
+
+  // Update the event
+  const updateResponse = await calendar.events.patch({
+    calendarId: 'primary',
+    eventId,
+    requestBody: {
+      attendees: updatedAttendees,
+    },
+  })
+
+  const event = updateResponse.data
+
+  return {
+    id: event.id || '',
+    summary: event.summary || '',
+    description: event.description || undefined,
+    start: {
+      dateTime: event.start?.dateTime || event.start?.date || '',
+      timeZone: event.start?.timeZone || undefined,
+    },
+    end: {
+      dateTime: event.end?.dateTime || event.end?.date || '',
+      timeZone: event.end?.timeZone || undefined,
+    },
+    attendees: event.attendees?.map((a) => ({
+      email: a.email || '',
+      displayName: a.displayName || undefined,
+      responseStatus: a.responseStatus as 'accepted' | 'declined' | 'tentative' | 'needsAction' | undefined,
+    })),
+    location: event.location || undefined,
+    status: event.status as CalendarEvent['status'],
+    htmlLink: event.htmlLink || undefined,
   }
 }
 
