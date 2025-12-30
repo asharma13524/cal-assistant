@@ -1,0 +1,23 @@
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: Date
+}
+
+export interface ChatSession {
+  id: string
+  messages: ChatMessage[]
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface ToolCall {
+  name: string
+  parameters: Record<string, any>
+}
+
+export interface AIResponse {
+  content: string
+  toolCalls?: ToolCall[]
+}
