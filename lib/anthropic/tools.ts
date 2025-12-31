@@ -1,4 +1,5 @@
 import type { Tool } from '@anthropic-ai/sdk/resources/messages'
+import { USER_TIMEZONE } from '@/lib/constants'
 
 export const calendarTools: Tool[] = [
   {
@@ -196,18 +197,36 @@ export const calendarTools: Tool[] = [
 ]
 
 export function getSystemPrompt(): string {
+  // Use fixed timezone from constants
+  const userTimezone = USER_TIMEZONE
   const now = new Date()
-  const todayStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-  const todayISO = now.toISOString().split('T')[0]
+  const todayStr = now.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: userTimezone
+  })
+  const currentTime = now.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: userTimezone
+  })
+  // Get the date in the user's timezone
+  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: userTimezone }) // en-CA gives YYYY-MM-DD
+  const todayISO = formatter.format(now)
 
   return `You are a helpful calendar assistant with access to the user's Google Calendar.
 
 ## ⏰ CURRENT DATE AND TIME (USE THIS FOR ALL DATE CALCULATIONS):
 - **Today is: ${todayStr}**
 - **ISO format: ${todayISO}**
-- **Current time: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}**
+- **Current time: ${currentTime}**
+- **Timezone: ${userTimezone}**
 
-IMPORTANT: The current YEAR is ${now.getFullYear()}. When scheduling future events, use ${now.getFullYear()} or ${now.getFullYear() + 1} as appropriate.
+IMPORTANT:
+- The current YEAR is ${now.getFullYear()}. When scheduling future events, use ${now.getFullYear()} or ${now.getFullYear() + 1} as appropriate.
+- All times are in the user's local timezone (${userTimezone}). When the user says "1 PM", generate "13:00:00" - the system handles timezone conversion.
 
 ## Your capabilities:
 1. View calendar events

@@ -3,7 +3,7 @@ import { getAnthropicClient } from '@/lib/anthropic/client'
 import { calendarTools, getSystemPrompt } from '@/lib/anthropic/tools'
 import { getValidAccessToken, getSession } from '@/lib/auth/session'
 import { getCalendarEvents, getCalendarStats, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, addEventAttendee, removeEventAttendee } from '@/lib/google/calendar'
-import { CLAUDE_MODEL, CLAUDE_MAX_TOKENS } from '@/lib/constants'
+import { CLAUDE_MODEL, CLAUDE_MAX_TOKENS, USER_TIMEZONE } from '@/lib/constants'
 import type { UpdateEventData } from '@/lib/types/calendar'
 import type { MessageParam, ContentBlock, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages'
 
@@ -159,11 +159,11 @@ async function executeToolCall(
           description: toolInput.description as string | undefined,
           start: {
             dateTime: toolInput.start_time as string,
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timeZone: USER_TIMEZONE,
           },
           end: {
             dateTime: toolInput.end_time as string,
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timeZone: USER_TIMEZONE,
           },
           attendees: (toolInput.attendees as string[] | undefined)?.map((email) => ({ email })),
           location: toolInput.location as string | undefined,
@@ -187,13 +187,13 @@ async function executeToolCall(
         if (toolInput.start_time) {
           updateData.start = {
             dateTime: toolInput.start_time as string,
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timeZone: USER_TIMEZONE,
           }
         }
         if (toolInput.end_time) {
           updateData.end = {
             dateTime: toolInput.end_time as string,
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            timeZone: USER_TIMEZONE,
           }
         }
 
