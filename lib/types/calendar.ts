@@ -20,6 +20,9 @@ export interface CalendarEvent {
   location?: string
   status?: 'confirmed' | 'tentative' | 'cancelled'
   htmlLink?: string
+  colorId?: string
+  backgroundColor?: string
+  foregroundColor?: string
 }
 
 export interface CreateEventData {
@@ -60,4 +63,14 @@ export interface UpdateEventData {
 export interface AttendeeOperation {
   eventId: string
   email: string
+}
+
+export type ViewMode = 'day' | 'week' | 'month' | 'year'
+
+export interface EventPosition {
+  top: number
+  height: number
+  left: string
+  width: string
+  zIndex: number
 }
