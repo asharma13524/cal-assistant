@@ -37,29 +37,42 @@ export default function Calendar() {
 
   // Calculate date range for fetching events based on view mode
   const { timeMin, timeMax } = useMemo(() => {
+    let result
     switch (viewMode) {
       case 'day':
         const dayStart = new Date(selectedDay)
         dayStart.setHours(0, 0, 0, 0)
         const dayEnd = new Date(selectedDay)
         dayEnd.setHours(23, 59, 59, 999)
-        return { timeMin: dayStart, timeMax: dayEnd }
+        result = { timeMin: dayStart, timeMax: dayEnd }
+        break
 
       case 'week':
         const weekStart = getWeekStart(selectedDay)
         const weekEnd = getWeekEnd(selectedDay)
-        return { timeMin: weekStart, timeMax: weekEnd }
+        result = { timeMin: weekStart, timeMax: weekEnd }
+        break
 
       case 'month':
-        const monthStart = new Date(currentYear, currentMonth, 1)
-        const monthEnd = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999)
-        return { timeMin: monthStart, timeMax: monthEnd }
+        const monthStart = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), 1)
+        const monthEnd = new Date(selectedDay.getFullYear(), selectedDay.getMonth() + 1, 0, 23, 59, 59, 999)
+        result = { timeMin: monthStart, timeMax: monthEnd }
+        break
 
       case 'year':
-        const yearStart = new Date(currentYear, 0, 1)
-        const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59, 999)
-        return { timeMin: yearStart, timeMax: yearEnd }
+        const yearStart = new Date(selectedDay.getFullYear(), 0, 1)
+        const yearEnd = new Date(selectedDay.getFullYear(), 11, 31, 23, 59, 59, 999)
+        result = { timeMin: yearStart, timeMax: yearEnd }
+        break
     }
+
+    console.log('[Date Range]', {
+      viewMode,
+      timeMin: result.timeMin.toISOString(),
+      timeMax: result.timeMax.toISOString(),
+    })
+
+    return result
   }, [viewMode, selectedDay, currentMonth, currentYear])
 
   const { events, isLoading: eventsLoading, mutate: refreshEvents } = useCalendarEventsSWR({
@@ -71,14 +84,34 @@ export default function Calendar() {
   const eventsByDay = useMemo(() => {
     const grouped: Record<number, CalendarEvent[]> = {}
 
+    // Use the selected day's month and year for filtering, not currentMonth/currentYear
+    // This ensures the panel shows events for the actually selected day
+    const targetMonth = selectedDay.getMonth()
+    const targetYear = selectedDay.getFullYear()
+
+    console.log('[eventsByDay] Filtering events:', {
+      targetMonth,
+      targetYear,
+      totalEvents: events.length,
+      selectedDay: selectedDay.toDateString(),
+    })
+
     for (const event of events) {
       const dateString = event.start.dateTime || event.start.date || ''
       if (!dateString) continue
 
       const eventDate = new Date(dateString)
+      console.log('[eventsByDay] Event:', {
+        summary: event.summary,
+        dateString,
+        eventMonth: eventDate.getMonth(),
+        eventYear: eventDate.getFullYear(),
+        matches: eventDate.getMonth() === targetMonth && eventDate.getFullYear() === targetYear,
+      })
+
       if (
-        eventDate.getMonth() === currentMonth &&
-        eventDate.getFullYear() === currentYear
+        eventDate.getMonth() === targetMonth &&
+        eventDate.getFullYear() === targetYear
       ) {
         const day = eventDate.getDate()
         if (!grouped[day]) {
@@ -97,8 +130,9 @@ export default function Calendar() {
       })
     }
 
+    console.log('[eventsByDay] Result:', grouped)
     return grouped
-  }, [events, currentMonth, currentYear])
+  }, [events, selectedDay])
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -267,13 +301,29 @@ export default function Calendar() {
         const weekEnd = getWeekEnd(selectedDay)
         return formatDateRange(weekStart, weekEnd)
       case 'month':
-        return `${MONTHS[currentMonth]} ${currentYear}`
+        return `${MONTHS[selectedDay.getMonth()]} ${selectedDay.getFullYear()}`
       case 'year':
-        return `${currentYear}`
+        return `${selectedDay.getFullYear()}`
     }
   }
 
   const selectedEvents = selectedDate ? eventsByDay[selectedDate] || [] : []
+
+  // Debug logging
+  useEffect(() => {
+    console.log('[Calendar Debug]', {
+      viewMode,
+      selectedDate,
+      selectedDay: selectedDay.toDateString(),
+      selectedDayMonth: selectedDay.getMonth(),
+      selectedDayYear: selectedDay.getFullYear(),
+      currentMonth,
+      currentYear,
+      eventsByDayKeys: Object.keys(eventsByDay),
+      selectedEvents: selectedEvents.length,
+      totalEvents: events.length,
+    })
+  }, [viewMode, selectedDate, selectedDay, currentMonth, currentYear, eventsByDay, selectedEvents, events])
 
   if (authLoading) {
     return (
@@ -347,8 +397,8 @@ export default function Calendar() {
             <div className="transition-opacity duration-200">
               {viewMode === 'month' && (
                 <MonthView
-                  currentMonth={currentMonth}
-                  currentYear={currentYear}
+                  currentMonth={selectedDay.getMonth()}
+                  currentYear={selectedDay.getFullYear()}
                   events={events}
                   selectedDate={selectedDate}
                   onDateClick={handleDateClick}
@@ -371,7 +421,7 @@ export default function Calendar() {
               )}
               {viewMode === 'year' && (
                 <YearView
-                  currentYear={currentYear}
+                  currentYear={selectedDay.getFullYear()}
                   events={events}
                   onMonthClick={handleMonthClick}
                 />
@@ -383,7 +433,7 @@ export default function Calendar() {
           <SelectedDayPanel
             selectedDate={
               selectedDate
-                ? { month: MONTHS[currentMonth], day: selectedDate }
+                ? { month: MONTHS[selectedDay.getMonth()], day: selectedDate }
                 : null
             }
             events={selectedEvents}

@@ -25,6 +25,11 @@ export interface CalendarEvent {
   foregroundColor?: string
 }
 
+export interface CalendarEventWithColumn extends CalendarEvent {
+  column?: number
+  totalColumns?: number
+}
+
 export interface CreateEventData {
   summary: string
   description?: string

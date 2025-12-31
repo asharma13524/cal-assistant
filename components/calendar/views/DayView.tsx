@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useMemo } from 'react'
-import type { CalendarEvent } from '@/lib/types/calendar'
-import { TimelineGrid } from '../shared/TimelineGrid'
+import type { CalendarEvent, CalendarEventWithColumn } from '@/lib/types/calendar'
 import { EventBlock } from '../shared/EventBlock'
 import { CurrentTimeIndicator } from '../shared/CurrentTimeIndicator'
 import {
@@ -19,8 +18,8 @@ interface DayViewProps {
   onEventClick: (event: CalendarEvent) => void
 }
 
-const START_HOUR = 6
-const END_HOUR = 22
+const START_HOUR = 0  // Midnight
+const END_HOUR = 23   // 11 PM - full 24 hour day
 const HOUR_HEIGHT = getHourHeight()
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -65,51 +64,42 @@ export function DayView({ selectedDay, events, onEventClick }: DayViewProps) {
 
   return (
     <div className="bg-white dark:bg-zinc-800/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
-      {/* Day header */}
-      <div className="sticky top-0 z-20 bg-white dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800">
-        <div className="flex">
-          {/* Time column spacer */}
-          <div className="w-16 flex-shrink-0 border-r border-zinc-200 dark:border-zinc-800" />
+      {/* Scrollable container */}
+      <div
+        ref={containerRef}
+        className="overflow-y-auto max-h-[calc(100vh-200px)]"
+      >
+        {/* Day header - inside scroll container */}
+        <div className="sticky top-0 z-20 bg-white dark:bg-zinc-800/95 border-b border-zinc-200 dark:border-zinc-800">
+          <div className="flex">
+            {/* Time column spacer */}
+            <div className="w-16 flex-shrink-0 border-r border-zinc-200 dark:border-zinc-800" />
 
-          {/* Day header */}
-          <div className="flex-1 p-4 text-center">
-            <div className="text-sm font-medium text-zinc-500 dark:text-zinc-500">{dayName}</div>
-            <div className="flex items-center justify-center gap-2 mt-1">
-              <div
-                className={`text-2xl font-semibold ${
-                  dayIsToday
-                    ? 'w-10 h-10 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500 text-white'
-                    : 'text-zinc-700 dark:text-zinc-300'
-                }`}
-              >
-                {selectedDay.getDate()}
+            {/* Day header */}
+            <div className="flex-1 p-4 text-center">
+              <div className="text-sm font-medium text-zinc-500 dark:text-zinc-500">{dayName}</div>
+              <div className="flex items-center justify-center gap-2 mt-1">
+                <div
+                  className={`text-2xl font-semibold ${
+                    dayIsToday
+                      ? 'w-10 h-10 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500 text-white'
+                      : 'text-zinc-700 dark:text-zinc-300'
+                  }`}
+                >
+                  {selectedDay.getDate()}
+                </div>
+                {!dayIsToday && (
+                  <div className="text-lg font-medium text-zinc-500 dark:text-zinc-500">{month}</div>
+                )}
               </div>
-              {!dayIsToday && (
-                <div className="text-lg font-medium text-zinc-500 dark:text-zinc-500">{month}</div>
-              )}
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Timeline */}
-      <div
-        ref={containerRef}
-        className="relative overflow-y-auto max-h-[calc(100vh-300px)]"
-      >
-        {/* Container with exact height */}
+        {/* Timeline */}
+        <div className="relative pt-3">
+        {/* Container with exact height + extra padding for first time label */}
         <div className="relative" style={{ height: `${(END_HOUR - START_HOUR + 1) * HOUR_HEIGHT}px` }}>
-          {/* Grid lines background - single source of truth */}
-          <div className="absolute inset-0 pointer-events-none z-0">
-            {Array.from({ length: END_HOUR - START_HOUR }).map((_, i) => (
-              <div
-                key={i}
-                className="absolute w-full h-px bg-zinc-200 dark:bg-zinc-800"
-                style={{ top: `${(i + 1) * HOUR_HEIGHT}px` }}
-              />
-            ))}
-          </div>
-
           {/* Content layer */}
           <div className="relative flex h-full">
             {/* Time labels */}
@@ -139,9 +129,20 @@ export function DayView({ selectedDay, events, onEventClick }: DayViewProps) {
 
             {/* Day column with events */}
             <div className="flex-1 relative">
+              {/* Horizontal grid lines */}
+              <div className="absolute inset-0 pointer-events-none z-0">
+                {Array.from({ length: END_HOUR - START_HOUR }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="absolute w-full h-px bg-zinc-200 dark:bg-zinc-700/50"
+                    style={{ top: `${(i + 1) * HOUR_HEIGHT}px` }}
+                  />
+                ))}
+              </div>
+
               {/* Events */}
               {dayEvents.map((event) => {
-                const eventWithCol = event as any
+                const eventWithCol = event as CalendarEventWithColumn
                 const position = calculateEventPosition(
                   event,
                   START_HOUR,
@@ -167,19 +168,20 @@ export function DayView({ selectedDay, events, onEventClick }: DayViewProps) {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Empty state */}
-      {dayEvents.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="text-center text-zinc-400 dark:text-zinc-600 mt-20">
-            <svg className="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <p className="text-sm">No events today</p>
-          </div>
         </div>
-      )}
+
+        {/* Empty state */}
+        {dayEvents.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="text-center text-zinc-400 dark:text-zinc-600 mt-20">
+              <svg className="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-sm">No events today</p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

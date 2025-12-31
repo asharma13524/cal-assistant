@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useMemo } from 'react'
-import type { CalendarEvent } from '@/lib/types/calendar'
-import { TimelineGrid } from '../shared/TimelineGrid'
+import type { CalendarEvent, CalendarEventWithColumn } from '@/lib/types/calendar'
 import { EventBlock } from '../shared/EventBlock'
 import { CurrentTimeIndicator } from '../shared/CurrentTimeIndicator'
 import {
@@ -22,8 +21,8 @@ interface WeekViewProps {
 }
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-const START_HOUR = 6
-const END_HOUR = 22
+const START_HOUR = 0  // Midnight
+const END_HOUR = 23   // 11 PM - full 24 hour day
 const HOUR_HEIGHT = getHourHeight()
 
 export function WeekView({ weekStart, events, onEventClick, onDayClick }: WeekViewProps) {
@@ -70,58 +69,49 @@ export function WeekView({ weekStart, events, onEventClick, onDayClick }: WeekVi
   }, [weekDays])
 
   return (
-    <div
-      ref={containerRef}
-      className="bg-white dark:bg-zinc-800/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm"
-    >
-      {/* Day headers */}
-      <div className="sticky top-0 z-20 bg-white dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800">
-        <div className="flex">
-          {/* Time column spacer */}
-          <div className="w-16 flex-shrink-0 border-r border-zinc-200 dark:border-zinc-800" />
+    <div className="bg-white dark:bg-zinc-800/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
+      {/* Scrollable container for both header and timeline */}
+      <div
+        ref={containerRef}
+        className="overflow-y-auto max-h-[calc(100vh-200px)]"
+      >
+        {/* Day headers - inside scroll container */}
+        <div className="sticky top-0 z-20 bg-white dark:bg-zinc-800/95 border-b border-zinc-200 dark:border-zinc-800">
+          <div className="flex">
+            {/* Time column spacer */}
+            <div className="w-16 flex-shrink-0 border-r border-zinc-200 dark:border-zinc-800" />
 
-          {/* Day headers */}
-          {weekDays.map((day, index) => {
-            const dayIsToday = isToday(day)
-            return (
-              <button
-                key={index}
-                onClick={() => onDayClick?.(day)}
-                className="flex-1 p-3 text-center border-r border-zinc-200 dark:border-zinc-800 last:border-r-0 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors"
-              >
-                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-500">
-                  {WEEKDAYS[day.getDay()].slice(0, 3)}
-                </div>
+            {/* Day headers */}
+            {weekDays.map((day, index) => {
+              const dayIsToday = isToday(day)
+              return (
                 <div
-                  className={`text-lg font-semibold mt-1 ${
-                    dayIsToday
-                      ? 'w-8 h-8 mx-auto flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500 text-white'
-                      : 'text-zinc-700 dark:text-zinc-300'
-                  }`}
+                  key={index}
+                  onClick={() => onDayClick?.(day)}
+                  className="flex-1 p-3 text-center border-r border-zinc-200 dark:border-zinc-800 last:border-r-0 hover:bg-zinc-100 dark:hover:bg-zinc-700/50 transition-colors cursor-pointer"
                 >
-                  {day.getDate()}
+                  <div className="text-xs font-medium text-zinc-500 dark:text-zinc-500">
+                    {WEEKDAYS[day.getDay()].slice(0, 3)}
+                  </div>
+                  <div
+                    className={`text-lg font-semibold mt-1 ${
+                      dayIsToday
+                        ? 'w-8 h-8 mx-auto flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500 text-white'
+                        : 'text-zinc-700 dark:text-zinc-300'
+                    }`}
+                  >
+                    {day.getDate()}
+                  </div>
                 </div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Timeline */}
-      <div className="relative overflow-y-auto max-h-[calc(100vh-300px)]">
-        {/* Container with exact height */}
-        <div className="relative" style={{ height: `${(END_HOUR - START_HOUR + 1) * HOUR_HEIGHT}px` }}>
-          {/* Grid lines background - single source of truth */}
-          <div className="absolute inset-0 pointer-events-none z-0">
-            {Array.from({ length: END_HOUR - START_HOUR }).map((_, i) => (
-              <div
-                key={i}
-                className="absolute w-full h-px bg-zinc-200 dark:bg-zinc-800"
-                style={{ top: `${(i + 1) * HOUR_HEIGHT}px` }}
-              />
-            ))}
+              )
+            })}
           </div>
+        </div>
 
+        {/* Timeline */}
+        <div className="relative pt-3">
+        {/* Container with exact height + extra padding for first time label */}
+        <div className="relative" style={{ height: `${(END_HOUR - START_HOUR + 1) * HOUR_HEIGHT}px` }}>
           {/* Content layer */}
           <div className="relative flex h-full">
             {/* Time labels */}
@@ -151,6 +141,17 @@ export function WeekView({ weekStart, events, onEventClick, onDayClick }: WeekVi
 
             {/* Day columns */}
             <div className="flex-1 flex relative">
+              {/* Horizontal grid lines - inside the day columns area */}
+              <div className="absolute inset-0 pointer-events-none z-0">
+                {Array.from({ length: END_HOUR - START_HOUR }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="absolute w-full h-px bg-zinc-200 dark:bg-zinc-700/50"
+                    style={{ top: `${(i + 1) * HOUR_HEIGHT}px` }}
+                  />
+                ))}
+              </div>
+
               {weekDays.map((day, dayIndex) => {
                 const dayKey = day.toDateString()
                 const dayEvents = eventsByDay[dayKey] || []
@@ -162,7 +163,7 @@ export function WeekView({ weekStart, events, onEventClick, onDayClick }: WeekVi
                   >
                     {/* Events */}
                     {dayEvents.map((event) => {
-                      const eventWithCol = event as any
+                      const eventWithCol = event as CalendarEventWithColumn
                       const position = calculateEventPosition(
                         event,
                         START_HOUR,
@@ -190,6 +191,7 @@ export function WeekView({ weekStart, events, onEventClick, onDayClick }: WeekVi
               })}
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>

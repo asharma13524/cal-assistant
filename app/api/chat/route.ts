@@ -4,6 +4,7 @@ import { calendarTools, getSystemPrompt } from '@/lib/anthropic/tools'
 import { getValidAccessToken, getSession } from '@/lib/auth/session'
 import { getCalendarEvents, getCalendarStats, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, addEventAttendee, removeEventAttendee } from '@/lib/google/calendar'
 import { CLAUDE_MODEL, CLAUDE_MAX_TOKENS } from '@/lib/constants'
+import type { UpdateEventData } from '@/lib/types/calendar'
 import type { MessageParam, ContentBlock, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages'
 
 interface ChatRequest {
@@ -52,13 +53,6 @@ async function executeToolCall(
         } else {
           endDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         }
-
-        console.log('[Chat] get_calendar_events params:', {
-          input_start: toolInput.start_date,
-          input_end: toolInput.end_date,
-          parsed_start: startDate.toISOString(),
-          parsed_end: endDate.toISOString(),
-        })
 
         const events = await getCalendarEvents(accessToken, startDate, endDate)
 
@@ -183,7 +177,7 @@ async function executeToolCall(
       }
 
       case 'update_calendar_event': {
-        const updateData: any = {
+        const updateData: UpdateEventData = {
           eventId: toolInput.event_id as string,
         }
 
@@ -213,9 +207,7 @@ async function executeToolCall(
 
       case 'delete_calendar_event': {
         const eventId = toolInput.event_id as string
-        console.log(`[Chat] Attempting to delete event: ${eventId}`)
         const result = await deleteCalendarEvent(accessToken, eventId)
-        console.log(`[Chat] Delete result:`, result)
         return {
           content: `✅ Event "${result.eventTitle}" deleted successfully.`,
           modifiedEvents: true,
@@ -314,7 +306,6 @@ export async function POST(request: NextRequest) {
     const session = await getSession()
 
     if (!accessToken || !session) {
-      console.log('[Chat API] No valid session or token')
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
@@ -324,8 +315,6 @@ export async function POST(request: NextRequest) {
     if (!message?.trim()) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 })
     }
-
-    console.log('[Chat API] Processing message:', message.substring(0, 50) + '...')
 
     const client = getAnthropicClient()
 
@@ -341,10 +330,6 @@ export async function POST(request: NextRequest) {
     // Detect if message is likely about calendar data (requires tool use)
     const calendarKeywords = /\b(meeting|event|calendar|schedule|busy|free|available|book|cancel|delete|remove|create|add|update|change|reschedule|time|today|tomorrow|week|month|how much|how many)\b/i
     const shouldForceToolUse = calendarKeywords.test(message)
-
-    if (shouldForceToolUse) {
-      console.log('[Chat API] Forcing tool use for calendar-related message')
-    }
 
     // Initial API call - force tool use for calendar-related questions
     let response = await client.messages.create({
@@ -365,21 +350,17 @@ export async function POST(request: NextRequest) {
         (block): block is Extract<ContentBlock, { type: 'tool_use' }> => block.type === 'tool_use'
       )
 
-      console.log('[Chat API] Executing tools:', toolUseBlocks.map(t => t.name))
-
       // Execute tools individually to handle errors gracefully
       const toolResults: ToolResultBlockParam[] = []
       let anyToolModifiedEvents = false
 
       for (const toolUse of toolUseBlocks) {
-        console.log(`[Chat API] Executing tool: ${toolUse.name}`, JSON.stringify(toolUse.input, null, 2))
         try {
           const result = await executeToolCall(
             toolUse.name,
             toolUse.input as Record<string, unknown>,
             accessToken
           )
-          console.log(`[Chat API] Tool ${toolUse.name} result:`, result.content.substring(0, 200))
 
           // Track if any tool modified events
           if (result.modifiedEvents) {
@@ -424,8 +405,6 @@ export async function POST(request: NextRequest) {
     const textContent = response.content.find(
       (block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text'
     )
-
-    console.log('[Chat API] Response generated successfully')
 
     return NextResponse.json({
       response: textContent?.text || 'I apologize, but I was unable to generate a response.',

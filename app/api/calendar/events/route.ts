@@ -8,26 +8,21 @@ export async function GET(request: NextRequest) {
     const accessToken = await getValidAccessToken()
 
     if (!accessToken) {
-      console.log('[Calendar API] No valid access token')
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
     const searchParams = request.nextUrl.searchParams
     const timeMin = searchParams.get('timeMin')
     const timeMax = searchParams.get('timeMax')
-
-    console.log('[Calendar API] Fetching events:', {
-      timeMin: timeMin || 'default',
-      timeMax: timeMax || 'default'
-    })
+    const maxResults = searchParams.get('maxResults')
 
     const events = await getCalendarEvents(
       accessToken,
       timeMin ? new Date(timeMin) : undefined,
-      timeMax ? new Date(timeMax) : undefined
+      timeMax ? new Date(timeMax) : undefined,
+      maxResults ? parseInt(maxResults, 10) : undefined
     )
 
-    console.log(`[Calendar API] Found ${events.length} events`)
     return NextResponse.json({ events })
   } catch (error) {
     console.error('[Calendar API] Error:', error)
