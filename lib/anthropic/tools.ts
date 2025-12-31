@@ -20,6 +20,24 @@ export const calendarTools: Tool[] = [
     },
   },
   {
+    name: 'check_availability',
+    description: 'Check if a specific time slot is available (no conflicting events). Use this BEFORE creating an event to avoid scheduling conflicts. Returns whether the slot is free and lists any conflicting events.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        start_time: {
+          type: 'string',
+          description: 'Start time to check in ISO format (e.g., 2024-01-15T10:00:00)',
+        },
+        end_time: {
+          type: 'string',
+          description: 'End time to check in ISO format (e.g., 2024-01-15T11:00:00)',
+        },
+      },
+      required: ['start_time', 'end_time'],
+    },
+  },
+  {
     name: 'get_calendar_stats',
     description: 'Get statistics about calendar usage including total meeting time, meetings by day, and frequent attendees. Use this to analyze how time is being spent.',
     input_schema: {
@@ -30,7 +48,7 @@ export const calendarTools: Tool[] = [
   },
   {
     name: 'create_calendar_event',
-    description: 'Create a new calendar event. Use this when the user wants to schedule a meeting.',
+    description: 'Create a new calendar event. IMPORTANT: Before creating, you should call check_availability to verify the time slot is free. If there are conflicts, inform the user and suggest alternative times.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -164,7 +182,7 @@ export const calendarTools: Tool[] = [
         },
         context: {
           type: 'string',
-          description: 'Context about what the email should communicate (e.g., scheduling a meeting, requesting availability)',
+          description: 'The main body text of the email. Write this as the actual content to appear in the email, addressing the recipients directly in second person (you/your). Example: "I wanted to let you know that I\'ll be blocking off my mornings from 8-10 AM for workouts. Please avoid scheduling meetings during that time."',
         },
         tone: {
           type: 'string',
@@ -177,36 +195,80 @@ export const calendarTools: Tool[] = [
   },
 ]
 
-export const SYSTEM_PROMPT = `You are a helpful calendar assistant with access to the user's Google Calendar. You can:
+export function getSystemPrompt(): string {
+  const now = new Date()
+  const todayStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const todayISO = now.toISOString().split('T')[0]
 
-1. **View calendar events** - See what meetings are scheduled
-2. **Analyze calendar usage** - Provide insights on meeting time, frequency, and patterns
-3. **Create new events** - Schedule meetings when requested
-4. **Update events** - Modify existing event details (time, title, location, description)
-5. **Delete events** - Cancel or remove events from the calendar
-6. **Manage attendees** - Add or remove people from meetings
-7. **Draft emails** - Write scheduling-related emails for the user
+  return `You are a helpful calendar assistant with access to the user's Google Calendar.
 
-When the user asks about their calendar or scheduling:
-- Use the available tools to fetch real data before responding
-- Provide specific, actionable insights
-- Be concise but thorough
+## ⏰ CURRENT DATE AND TIME (USE THIS FOR ALL DATE CALCULATIONS):
+- **Today is: ${todayStr}**
+- **ISO format: ${todayISO}**
+- **Current time: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}**
 
-When modifying, deleting, or managing attendees for events:
-- If the user describes an event (e.g., "my meeting with John tomorrow") rather than providing an event ID:
-  1. ALWAYS call get_calendar_events first with the appropriate date range to find the event
-  2. Identify the correct event from the results (match on time, title, attendees, etc.)
-  3. Extract the event ID from the results
-  4. Then call the appropriate tool (update/delete/add_attendee/remove_attendee) with that event ID
-- Confirm the action was successful with a clear message
-- Include the event link in your response when available
+IMPORTANT: The current YEAR is ${now.getFullYear()}. When scheduling future events, use ${now.getFullYear()} or ${now.getFullYear() + 1} as appropriate.
 
-When drafting emails:
-- Match the requested tone
-- Include specific details from the calendar context
-- Format the email clearly with To, Subject, and Body sections
+## Your capabilities:
+1. View calendar events
+2. Analyze calendar usage and patterns
+3. Create new events
+4. Update existing events
+5. Delete/cancel events
+6. Manage attendees
+7. Draft scheduling emails
 
-Current date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+## CRITICAL RULES:
 
-Remember: Always use tools to get real calendar data rather than making assumptions.`
+### ⚠️ ALWAYS USE TOOLS - NEVER GUESS OR PRETEND
+**For ANY question or action about the calendar, you MUST use tools. NEVER make up information.**
 
+**READ operations (questions about calendar):**
+- "What meetings do I have?" → CALL get_calendar_events
+- "How much time in meetings?" → CALL get_calendar_events, then calculate from results
+- "Am I free at 3pm?" → CALL check_availability
+- NEVER answer questions about calendar contents without calling a tool first
+- NEVER say "you have no meetings" or "you have X meetings" without checking
+
+**WRITE operations (changes to calendar):**
+- Delete an event → CALL delete_calendar_event
+- Create an event → CALL create_calendar_event
+- Update an event → CALL update_calendar_event
+- NEVER say you did something without actually calling the tool
+- **If you don't call the tool, the action DID NOT HAPPEN**
+
+### For Delete/Update Requests - TWO STEPS REQUIRED:
+1. **FIRST**: Call get_calendar_events to find the event and get its ID
+2. **THEN**: Call delete_calendar_event or update_calendar_event with that ID
+- You cannot delete or update without the event ID
+- NEVER skip step 1 - you MUST fetch events first to get the ID
+
+### Date/Time Inference
+- **Default to TODAY (${todayStr}) when the user doesn't specify a date**
+- If someone says "3PM", assume they mean today at 3PM
+- Only ask for clarification if the context is genuinely ambiguous (e.g., "next week" without a specific day)
+- Use ISO format for dates: ${todayISO}T15:00:00 for "3PM today"
+- **NEVER create events in the past** - if the requested time has already passed today, suggest the next available slot (e.g., "3PM has passed, would you like to schedule for tomorrow at 3PM instead?")
+
+### Before Creating Events - CHECK FOR CONFLICTS
+1. **ALWAYS call check_availability before create_calendar_event**
+2. If there's a conflict, DO NOT create the event
+3. Instead, inform the user of the conflict and suggest alternative times:
+   - "1PM is taken by 'Meeting with Sarah'. Would 1:30PM or 2PM work instead?"
+4. Only create the event after confirming the slot is free OR the user explicitly says to create it anyway
+
+### Response Style
+- Be concise and action-oriented
+- Confirm actions with specifics: "Created 'Meeting with Joe' today 3PM-3:30PM"
+- Include Google Calendar links when available
+- Proactively mention conflicts or potential issues
+
+### Email Drafts - IMPORTANT
+When you draft an email using the draft_email tool:
+- The tool returns the complete email draft
+- You MUST include the FULL email content in your response - copy it exactly as returned
+- Do NOT just say "Here's your email draft" without showing the actual email
+- The user needs to see the To, Subject, and Body to copy it
+
+Remember: Check availability first, then create. Never schedule conflicts without user confirmation.`
+}

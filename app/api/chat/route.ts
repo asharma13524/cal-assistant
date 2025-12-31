@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAnthropicClient } from '@/lib/anthropic/client'
-import { calendarTools, SYSTEM_PROMPT } from '@/lib/anthropic/tools'
+import { calendarTools, getSystemPrompt } from '@/lib/anthropic/tools'
 import { getValidAccessToken, getSession } from '@/lib/auth/session'
 import { getCalendarEvents, getCalendarStats, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, addEventAttendee, removeEventAttendee } from '@/lib/google/calendar'
 import { CLAUDE_MODEL, CLAUDE_MAX_TOKENS } from '@/lib/constants'
@@ -24,12 +24,41 @@ async function executeToolCall(
   try {
     switch (toolName) {
       case 'get_calendar_events': {
-        const startDate = toolInput.start_date
-          ? new Date(toolInput.start_date as string)
-          : new Date()
-        const endDate = toolInput.end_date
-          ? new Date(toolInput.end_date as string)
-          : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        // Parse dates with proper handling for date-only strings
+        let startDate: Date
+        let endDate: Date
+
+        if (toolInput.start_date) {
+          const dateStr = toolInput.start_date as string
+          // If it's just a date (no time), set to start of day in local time
+          if (dateStr.length <= 10) {
+            startDate = new Date(dateStr + 'T00:00:00')
+          } else {
+            startDate = new Date(dateStr)
+          }
+        } else {
+          startDate = new Date()
+          startDate.setHours(0, 0, 0, 0)
+        }
+
+        if (toolInput.end_date) {
+          const dateStr = toolInput.end_date as string
+          // If it's just a date (no time), set to end of day in local time
+          if (dateStr.length <= 10) {
+            endDate = new Date(dateStr + 'T23:59:59')
+          } else {
+            endDate = new Date(dateStr)
+          }
+        } else {
+          endDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        }
+
+        console.log('[Chat] get_calendar_events params:', {
+          input_start: toolInput.start_date,
+          input_end: toolInput.end_date,
+          parsed_start: startDate.toISOString(),
+          parsed_end: endDate.toISOString(),
+        })
 
         const events = await getCalendarEvents(accessToken, startDate, endDate)
 
@@ -57,6 +86,54 @@ async function executeToolCall(
         }
       }
 
+      case 'check_availability': {
+        const startTime = new Date(toolInput.start_time as string)
+        const endTime = new Date(toolInput.end_time as string)
+
+        // Get events that might overlap with the requested time
+        const dayStart = new Date(startTime)
+        dayStart.setHours(0, 0, 0, 0)
+        const dayEnd = new Date(startTime)
+        dayEnd.setHours(23, 59, 59, 999)
+
+        const events = await getCalendarEvents(accessToken, dayStart, dayEnd)
+
+        // Check for conflicts
+        const conflicts = events.filter((event) => {
+          if (!event.start.dateTime || !event.end.dateTime) {
+            // All-day event - consider it a conflict for the whole day
+            return true
+          }
+          const eventStart = new Date(event.start.dateTime)
+          const eventEnd = new Date(event.end.dateTime)
+
+          // Check if there's any overlap
+          return startTime < eventEnd && endTime > eventStart
+        })
+
+        if (conflicts.length === 0) {
+          return {
+            content: `✅ The time slot ${startTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} is AVAILABLE. You can proceed to create the event.`,
+            modifiedEvents: false,
+          }
+        }
+
+        const conflictDetails = conflicts.map((c) => {
+          const cStart = c.start.dateTime ? new Date(c.start.dateTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'All day'
+          const cEnd = c.end.dateTime ? new Date(c.end.dateTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''
+          return `- "${c.summary}" (${cStart}${cEnd ? ` - ${cEnd}` : ''})`
+        }).join('\n')
+
+        // Suggest alternative times
+        const suggestedTime = new Date(Math.max(...conflicts.map(c => new Date(c.end.dateTime || dayEnd).getTime())))
+        const suggestedTimeStr = suggestedTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+
+        return {
+          content: `⚠️ CONFLICT DETECTED: The time slot ${startTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} overlaps with:\n${conflictDetails}\n\n💡 Suggested alternative: ${suggestedTimeStr} (after the last conflicting event)\n\nDo NOT create the event unless the user confirms they want to schedule despite the conflict.`,
+          modifiedEvents: false,
+        }
+      }
+
       case 'get_calendar_stats': {
         const stats = await getCalendarStats(accessToken)
         return {
@@ -71,6 +148,18 @@ async function executeToolCall(
       }
 
       case 'create_calendar_event': {
+        // Validate: prevent creating events in the past
+        const startTime = new Date(toolInput.start_time as string)
+        const now = new Date()
+        if (startTime < now) {
+          const tomorrow = new Date(startTime)
+          tomorrow.setDate(tomorrow.getDate() + 1)
+          return {
+            content: `⚠️ Cannot create event in the past. The requested time (${startTime.toLocaleString()}) has already passed. Would you like to schedule for ${tomorrow.toLocaleDateString()} at ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} instead?`,
+            modifiedEvents: false,
+          }
+        }
+
         const event = await createCalendarEvent(accessToken, {
           summary: toolInput.title as string,
           description: toolInput.description as string | undefined,
@@ -124,9 +213,11 @@ async function executeToolCall(
 
       case 'delete_calendar_event': {
         const eventId = toolInput.event_id as string
-        await deleteCalendarEvent(accessToken, eventId)
+        console.log(`[Chat] Attempting to delete event: ${eventId}`)
+        const result = await deleteCalendarEvent(accessToken, eventId)
+        console.log(`[Chat] Delete result:`, result)
         return {
-          content: `✅ Event deleted successfully (ID: ${eventId})`,
+          content: `✅ Event "${result.eventTitle}" deleted successfully.`,
           modifiedEvents: true,
         }
       }
@@ -157,19 +248,22 @@ async function executeToolCall(
         const context = toolInput.context as string
         const tone = (toolInput.tone as string) || 'friendly'
 
-        // Return a structured email draft
+        const emailBody = generateEmailBody(context, tone, recipients)
+
+        // Return a structured email draft with clear formatting
         return {
-          content: `📧 **Email Draft**
+          content: `📧 EMAIL DRAFT
+═══════════════════════════════════
 
-**To:** ${recipients.join(', ')}
-**Subject:** ${subject}
+To: ${recipients.join(', ')}
+Subject: ${subject}
 
----
+───────────────────────────────────
 
-${generateEmailBody(context, tone, recipients)}
+${emailBody}
 
----
-*This is a draft. Copy and send via your email client.*`,
+═══════════════════════════════════
+Copy the above and send via your email client.`,
           modifiedEvents: false,
         }
       }
@@ -193,13 +287,23 @@ function generateEmailBody(context: string, tone: string, recipients: string[]):
   const greeting = tone === 'formal' ? 'Dear' : tone === 'casual' ? 'Hey' : 'Hi'
   const signoff = tone === 'formal' ? 'Best regards' : tone === 'casual' ? 'Cheers' : 'Best'
 
-  const firstRecipient = recipients[0] || 'there'
+  // Format recipients properly for greeting
+  let recipientGreeting: string
+  if (recipients.length === 0) {
+    recipientGreeting = 'there'
+  } else if (recipients.length === 1) {
+    recipientGreeting = recipients[0]
+  } else if (recipients.length === 2) {
+    recipientGreeting = `${recipients[0]} and ${recipients[1]}`
+  } else {
+    const last = recipients[recipients.length - 1]
+    const rest = recipients.slice(0, -1).join(', ')
+    recipientGreeting = `${rest}, and ${last}`
+  }
 
-  return `${greeting} ${firstRecipient},
+  return `${greeting} ${recipientGreeting},
 
 ${context}
-
-Please let me know your availability, and I'll send a calendar invite.
 
 ${signoff}`
 }
@@ -234,13 +338,23 @@ export async function POST(request: NextRequest) {
       { role: 'user' as const, content: message },
     ]
 
-    // Initial API call
+    // Detect if message is likely about calendar data (requires tool use)
+    const calendarKeywords = /\b(meeting|event|calendar|schedule|busy|free|available|book|cancel|delete|remove|create|add|update|change|reschedule|time|today|tomorrow|week|month|how much|how many)\b/i
+    const shouldForceToolUse = calendarKeywords.test(message)
+
+    if (shouldForceToolUse) {
+      console.log('[Chat API] Forcing tool use for calendar-related message')
+    }
+
+    // Initial API call - force tool use for calendar-related questions
     let response = await client.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: CLAUDE_MAX_TOKENS,
-      system: SYSTEM_PROMPT,
+      system: getSystemPrompt(),
       tools: calendarTools,
       messages,
+      // Force Claude to use at least one tool for calendar questions
+      ...(shouldForceToolUse && { tool_choice: { type: 'any' as const } }),
     })
 
     // Handle tool use in a loop
@@ -258,12 +372,14 @@ export async function POST(request: NextRequest) {
       let anyToolModifiedEvents = false
 
       for (const toolUse of toolUseBlocks) {
+        console.log(`[Chat API] Executing tool: ${toolUse.name}`, JSON.stringify(toolUse.input, null, 2))
         try {
           const result = await executeToolCall(
             toolUse.name,
             toolUse.input as Record<string, unknown>,
             accessToken
           )
+          console.log(`[Chat API] Tool ${toolUse.name} result:`, result.content.substring(0, 200))
 
           // Track if any tool modified events
           if (result.modifiedEvents) {
@@ -298,7 +414,7 @@ export async function POST(request: NextRequest) {
       response = await client.messages.create({
         model: CLAUDE_MODEL,
         max_tokens: CLAUDE_MAX_TOKENS,
-        system: SYSTEM_PROMPT,
+        system: getSystemPrompt(),
         tools: calendarTools,
         messages,
       })

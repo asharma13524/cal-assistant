@@ -200,14 +200,32 @@ export async function updateCalendarEvent(
 export async function deleteCalendarEvent(
   accessToken: string,
   eventId: string
-): Promise<void> {
+): Promise<{ deleted: boolean; eventTitle?: string }> {
   const auth = getAuthenticatedClient(accessToken)
   const calendar = google.calendar({ version: 'v3', auth })
 
+  // First, verify the event exists and get its details
+  let eventTitle: string | undefined
+  try {
+    const getResponse = await calendar.events.get({
+      calendarId: 'primary',
+      eventId,
+    })
+    eventTitle = getResponse.data.summary || 'Untitled'
+    console.log(`[Calendar] Found event to delete: "${eventTitle}" (ID: ${eventId})`)
+  } catch (error) {
+    console.error(`[Calendar] Event not found for deletion: ${eventId}`, error)
+    throw new Error(`Event not found with ID: ${eventId}. The event may have already been deleted or the ID is incorrect.`)
+  }
+
+  // Now delete the event
   await calendar.events.delete({
     calendarId: 'primary',
     eventId,
   })
+
+  console.log(`[Calendar] Successfully deleted event: "${eventTitle}" (ID: ${eventId})`)
+  return { deleted: true, eventTitle }
 }
 
 export async function addEventAttendee(

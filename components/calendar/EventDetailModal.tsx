@@ -57,7 +57,13 @@ export function EventDetailModal({ event, isOpen, onClose }: EventDetailModalPro
   const formatDateTimeForInput = (dateTimeStr: string) => {
     if (!dateTimeStr) return ''
     const date = new Date(dateTimeStr)
-    return date.toISOString().slice(0, 16)
+    // Format as local time for datetime-local input (YYYY-MM-DDTHH:MM)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    return `${year}-${month}-${day}T${hours}:${minutes}`
   }
 
   const handleSave = async () => {

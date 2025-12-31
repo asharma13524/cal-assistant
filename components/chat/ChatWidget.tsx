@@ -65,8 +65,12 @@ export function ChatWidget() {
       // Trigger cache revalidation if events were modified
       if (data.metadata?.modifiedEvents) {
         console.log('[ChatWidget] Events modified, invalidating cache')
-        // Revalidate all calendar event caches
-        mutate((key) => typeof key === 'string' && key.startsWith('/api/calendar/events'))
+        // Revalidate all calendar event caches - use undefined data + revalidate: true
+        mutate(
+          (key) => typeof key === 'string' && key.startsWith('/api/calendar/events'),
+          undefined,
+          { revalidate: true }
+        )
       }
     } catch (error) {
       console.error('Chat error:', error)

@@ -103,7 +103,7 @@ export default function Calendar() {
     return date
   }, [currentYear, currentMonth])
 
-  const { events, isLoading: eventsLoading } = useCalendarEventsSWR({
+  const { events, isLoading: eventsLoading, mutate: refreshEvents } = useCalendarEventsSWR({
     timeMin,
     timeMax,
   })
@@ -258,9 +258,16 @@ export default function Calendar() {
             >
               Today
             </button>
-            {eventsLoading && (
-              <div className="w-4 h-4 border-2 border-zinc-300 dark:border-zinc-600 border-t-blue-500 rounded-full animate-spin" />
-            )}
+            <button
+              onClick={() => refreshEvents()}
+              disabled={eventsLoading}
+              className="p-1.5 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors disabled:opacity-50"
+              title="Refresh calendar"
+            >
+              <svg className={`w-4 h-4 ${eventsLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
