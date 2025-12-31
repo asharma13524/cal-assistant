@@ -103,7 +103,6 @@ export async function getValidAccessToken(): Promise<string | null> {
 
   if (isExpired && tokens.refresh_token) {
     try {
-      console.log('[Auth] Access token expired, refreshing...')
       const newCredentials = await refreshAccessToken(tokens.refresh_token)
 
       if (newCredentials.access_token) {
@@ -114,7 +113,6 @@ export async function getValidAccessToken(): Promise<string | null> {
         }
 
         await updateTokens(updatedTokens)
-        console.log('[Auth] Token refreshed successfully')
         return newCredentials.access_token
       }
     } catch (error) {

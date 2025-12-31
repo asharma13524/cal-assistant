@@ -66,12 +66,6 @@ export default function Calendar() {
         break
     }
 
-    console.log('[Date Range]', {
-      viewMode,
-      timeMin: result.timeMin.toISOString(),
-      timeMax: result.timeMax.toISOString(),
-    })
-
     return result
   }, [viewMode, selectedDay, currentMonth, currentYear])
 
@@ -89,25 +83,11 @@ export default function Calendar() {
     const targetMonth = selectedDay.getMonth()
     const targetYear = selectedDay.getFullYear()
 
-    console.log('[eventsByDay] Filtering events:', {
-      targetMonth,
-      targetYear,
-      totalEvents: events.length,
-      selectedDay: selectedDay.toDateString(),
-    })
-
     for (const event of events) {
       const dateString = event.start.dateTime || event.start.date || ''
       if (!dateString) continue
 
       const eventDate = new Date(dateString)
-      console.log('[eventsByDay] Event:', {
-        summary: event.summary,
-        dateString,
-        eventMonth: eventDate.getMonth(),
-        eventYear: eventDate.getFullYear(),
-        matches: eventDate.getMonth() === targetMonth && eventDate.getFullYear() === targetYear,
-      })
 
       if (
         eventDate.getMonth() === targetMonth &&
@@ -130,7 +110,6 @@ export default function Calendar() {
       })
     }
 
-    console.log('[eventsByDay] Result:', grouped)
     return grouped
   }, [events, selectedDay])
 
@@ -308,22 +287,6 @@ export default function Calendar() {
   }
 
   const selectedEvents = selectedDate ? eventsByDay[selectedDate] || [] : []
-
-  // Debug logging
-  useEffect(() => {
-    console.log('[Calendar Debug]', {
-      viewMode,
-      selectedDate,
-      selectedDay: selectedDay.toDateString(),
-      selectedDayMonth: selectedDay.getMonth(),
-      selectedDayYear: selectedDay.getFullYear(),
-      currentMonth,
-      currentYear,
-      eventsByDayKeys: Object.keys(eventsByDay),
-      selectedEvents: selectedEvents.length,
-      totalEvents: events.length,
-    })
-  }, [viewMode, selectedDate, selectedDay, currentMonth, currentYear, eventsByDay, selectedEvents, events])
 
   if (authLoading) {
     return (

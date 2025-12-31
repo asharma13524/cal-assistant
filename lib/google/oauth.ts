@@ -14,7 +14,6 @@ export function getOAuthClient() {
   const appUrl = APP_URL
   const redirectUri = `${appUrl}/api/auth/google/callback`
 
-  console.log('[OAuth] Redirect URI:', redirectUri)
 
   if (!clientId || !clientSecret) {
     throw new Error('Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET environment variables')

@@ -40,7 +40,7 @@ export function useCalendarEventsSWR(options: UseCalendarEventsSWROptions = {}) 
     {
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
-      refreshInterval: 5000, // Auto-refresh every 5 seconds as fallback (optimistic updates should make this rarely needed)
+      // No polling - cache is invalidated when events are modified via chat
       onError: (err) => {
         if (err.message === 'UNAUTHORIZED') {
           router.replace('/')
