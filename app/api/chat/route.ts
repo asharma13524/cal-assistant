@@ -4,6 +4,13 @@ import { calendarTools, getSystemPrompt } from '@/lib/anthropic/tools'
 import { getValidAccessToken, getSession } from '@/lib/auth/session'
 import { getCalendarEvents, getCalendarStats, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, addEventAttendee, removeEventAttendee } from '@/lib/google/calendar'
 import { CLAUDE_MODEL, CLAUDE_MAX_TOKENS, USER_TIMEZONE } from '@/lib/constants'
+import { 
+  parseInUserTimezone, 
+  isTimeInPast, 
+  formatTimeInUserTimezone, 
+  formatDateInUserTimezone, 
+  formatDateTimeInUserTimezone 
+} from '@/lib/utils/timezone'
 import type { UpdateEventData } from '@/lib/types/calendar'
 import type { MessageParam, ContentBlock, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages'
 
@@ -15,27 +22,6 @@ interface ChatRequest {
 interface ToolExecutionResult {
   content: string
   modifiedEvents: boolean
-}
-
-// Helper functions for consistent timezone formatting
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: USER_TIMEZONE
-  })
-}
-
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-US', {
-    timeZone: USER_TIMEZONE
-  })
-}
-
-function formatDateTime(date: Date): string {
-  return date.toLocaleString('en-US', {
-    timeZone: USER_TIMEZONE
-  })
 }
 
 async function executeToolCall(
@@ -92,7 +78,7 @@ async function executeToolCall(
           const start = new Date(e.start.dateTime)
           const end = new Date(e.end.dateTime)
           const attendeeList = e.attendees?.map((a) => a.displayName || a.email).join(', ')
-          return `- ${e.summary} on ${formatDate(start)} from ${formatTime(start)} to ${formatTime(end)}${attendeeList ? ` with ${attendeeList}` : ''} [ID: ${e.id}]`
+          return `- ${e.summary} on ${formatDateInUserTimezone(start)} from ${formatTimeInUserTimezone(start)} to ${formatTimeInUserTimezone(end)}${attendeeList ? ` with ${attendeeList}` : ''} [ID: ${e.id}]`
         })
 
         return {
@@ -128,14 +114,14 @@ async function executeToolCall(
 
         if (conflicts.length === 0) {
           return {
-            content: `✅ The time slot ${formatTime(startTime)} - ${formatTime(endTime)} is AVAILABLE. You can proceed to create the event.`,
+            content: `✅ The time slot ${formatTimeInUserTimezone(startTime)} - ${formatTimeInUserTimezone(endTime)} is AVAILABLE. You can proceed to create the event.`,
             modifiedEvents: false,
           }
         }
 
         const conflictDetails = conflicts.map((c) => {
-          const cStart = c.start.dateTime ? formatTime(new Date(c.start.dateTime)) : 'All day'
-          const cEnd = c.end.dateTime ? formatTime(new Date(c.end.dateTime)) : ''
+          const cStart = c.start.dateTime ? formatTimeInUserTimezone(new Date(c.start.dateTime)) : 'All day'
+          const cEnd = c.end.dateTime ? formatTimeInUserTimezone(new Date(c.end.dateTime)) : ''
           return `- "${c.summary}" (${cStart}${cEnd ? ` - ${cEnd}` : ''})`
         }).join('\n')
 
@@ -143,7 +129,7 @@ async function executeToolCall(
         const suggestedTime = new Date(Math.max(...conflicts.map(c => new Date(c.end.dateTime || dayEnd).getTime())))
 
         return {
-          content: `⚠️ CONFLICT DETECTED: The time slot ${formatTime(startTime)} - ${formatTime(endTime)} overlaps with:\n${conflictDetails}\n\n💡 Suggested alternative: ${formatTime(suggestedTime)} (after the last conflicting event)\n\nDo NOT create the event unless the user confirms they want to schedule despite the conflict.`,
+          content: `⚠️ CONFLICT DETECTED: The time slot ${formatTimeInUserTimezone(startTime)} - ${formatTimeInUserTimezone(endTime)} overlaps with:\n${conflictDetails}\n\n💡 Suggested alternative: ${formatTimeInUserTimezone(suggestedTime)} (after the last conflicting event)\n\nDo NOT create the event unless the user confirms they want to schedule despite the conflict.`,
           modifiedEvents: false,
         }
       }
@@ -163,13 +149,14 @@ async function executeToolCall(
 
       case 'create_calendar_event': {
         // Validate: prevent creating events in the past
-        const startTime = new Date(toolInput.start_time as string)
-        const now = new Date()
-        if (startTime < now) {
+        const startTimeStr = toolInput.start_time as string
+        
+        if (isTimeInPast(startTimeStr)) {
+          const startTime = parseInUserTimezone(startTimeStr)
           const tomorrow = new Date(startTime)
           tomorrow.setDate(tomorrow.getDate() + 1)
           return {
-            content: `⚠️ Cannot create event in the past. The requested time (${formatDateTime(startTime)}) has already passed. Would you like to schedule for ${formatDate(tomorrow)} at ${formatTime(startTime)} instead?`,
+            content: `⚠️ Cannot create event in the past. The requested time (${formatDateTimeInUserTimezone(startTime)}) has already passed. Would you like to schedule for ${formatDateInUserTimezone(tomorrow)} at ${formatTimeInUserTimezone(startTime)} instead?`,
             modifiedEvents: false,
           }
         }
@@ -189,7 +176,7 @@ async function executeToolCall(
           location: toolInput.location as string | undefined,
         })
 
-        const eventDate = event.start.dateTime ? formatDateTime(new Date(event.start.dateTime)) : 'scheduled'
+        const eventDate = event.start.dateTime ? formatDateTimeInUserTimezone(new Date(event.start.dateTime)) : 'scheduled'
         return {
           content: `✅ Event created: "${event.summary}" on ${eventDate}${event.htmlLink ? `\nView in Google Calendar: ${event.htmlLink}` : ''}`,
           modifiedEvents: true,
@@ -218,7 +205,7 @@ async function executeToolCall(
         }
 
         const updatedEvent = await updateCalendarEvent(accessToken, updateData)
-        const updatedDate = updatedEvent.start.dateTime ? formatDateTime(new Date(updatedEvent.start.dateTime)) : 'scheduled'
+        const updatedDate = updatedEvent.start.dateTime ? formatDateTimeInUserTimezone(new Date(updatedEvent.start.dateTime)) : 'scheduled'
         return {
           content: `✅ Event updated: "${updatedEvent.summary}" on ${updatedDate}${updatedEvent.htmlLink ? `\nView in Google Calendar: ${updatedEvent.htmlLink}` : ''}`,
           modifiedEvents: true,
