@@ -17,6 +17,27 @@ interface ToolExecutionResult {
   modifiedEvents: boolean
 }
 
+// Helper functions for consistent timezone formatting
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: USER_TIMEZONE
+  })
+}
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString('en-US', {
+    timeZone: USER_TIMEZONE
+  })
+}
+
+function formatDateTime(date: Date): string {
+  return date.toLocaleString('en-US', {
+    timeZone: USER_TIMEZONE
+  })
+}
+
 async function executeToolCall(
   toolName: string,
   toolInput: Record<string, unknown>,
@@ -71,7 +92,7 @@ async function executeToolCall(
           const start = new Date(e.start.dateTime)
           const end = new Date(e.end.dateTime)
           const attendeeList = e.attendees?.map((a) => a.displayName || a.email).join(', ')
-          return `- ${e.summary} on ${start.toLocaleDateString()} from ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} to ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${attendeeList ? ` with ${attendeeList}` : ''} [ID: ${e.id}]`
+          return `- ${e.summary} on ${formatDate(start)} from ${formatTime(start)} to ${formatTime(end)}${attendeeList ? ` with ${attendeeList}` : ''} [ID: ${e.id}]`
         })
 
         return {
@@ -107,23 +128,22 @@ async function executeToolCall(
 
         if (conflicts.length === 0) {
           return {
-            content: `✅ The time slot ${startTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} is AVAILABLE. You can proceed to create the event.`,
+            content: `✅ The time slot ${formatTime(startTime)} - ${formatTime(endTime)} is AVAILABLE. You can proceed to create the event.`,
             modifiedEvents: false,
           }
         }
 
         const conflictDetails = conflicts.map((c) => {
-          const cStart = c.start.dateTime ? new Date(c.start.dateTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'All day'
-          const cEnd = c.end.dateTime ? new Date(c.end.dateTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''
+          const cStart = c.start.dateTime ? formatTime(new Date(c.start.dateTime)) : 'All day'
+          const cEnd = c.end.dateTime ? formatTime(new Date(c.end.dateTime)) : ''
           return `- "${c.summary}" (${cStart}${cEnd ? ` - ${cEnd}` : ''})`
         }).join('\n')
 
         // Suggest alternative times
         const suggestedTime = new Date(Math.max(...conflicts.map(c => new Date(c.end.dateTime || dayEnd).getTime())))
-        const suggestedTimeStr = suggestedTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
         return {
-          content: `⚠️ CONFLICT DETECTED: The time slot ${startTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} overlaps with:\n${conflictDetails}\n\n💡 Suggested alternative: ${suggestedTimeStr} (after the last conflicting event)\n\nDo NOT create the event unless the user confirms they want to schedule despite the conflict.`,
+          content: `⚠️ CONFLICT DETECTED: The time slot ${formatTime(startTime)} - ${formatTime(endTime)} overlaps with:\n${conflictDetails}\n\n💡 Suggested alternative: ${formatTime(suggestedTime)} (after the last conflicting event)\n\nDo NOT create the event unless the user confirms they want to schedule despite the conflict.`,
           modifiedEvents: false,
         }
       }
@@ -149,7 +169,7 @@ async function executeToolCall(
           const tomorrow = new Date(startTime)
           tomorrow.setDate(tomorrow.getDate() + 1)
           return {
-            content: `⚠️ Cannot create event in the past. The requested time (${startTime.toLocaleString()}) has already passed. Would you like to schedule for ${tomorrow.toLocaleDateString()} at ${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} instead?`,
+            content: `⚠️ Cannot create event in the past. The requested time (${formatDateTime(startTime)}) has already passed. Would you like to schedule for ${formatDate(tomorrow)} at ${formatTime(startTime)} instead?`,
             modifiedEvents: false,
           }
         }
@@ -169,7 +189,7 @@ async function executeToolCall(
           location: toolInput.location as string | undefined,
         })
 
-        const eventDate = event.start.dateTime ? new Date(event.start.dateTime).toLocaleString() : 'scheduled'
+        const eventDate = event.start.dateTime ? formatDateTime(new Date(event.start.dateTime)) : 'scheduled'
         return {
           content: `✅ Event created: "${event.summary}" on ${eventDate}${event.htmlLink ? `\nView in Google Calendar: ${event.htmlLink}` : ''}`,
           modifiedEvents: true,
@@ -198,7 +218,7 @@ async function executeToolCall(
         }
 
         const updatedEvent = await updateCalendarEvent(accessToken, updateData)
-        const updatedDate = updatedEvent.start.dateTime ? new Date(updatedEvent.start.dateTime).toLocaleString() : 'scheduled'
+        const updatedDate = updatedEvent.start.dateTime ? formatDateTime(new Date(updatedEvent.start.dateTime)) : 'scheduled'
         return {
           content: `✅ Event updated: "${updatedEvent.summary}" on ${updatedDate}${updatedEvent.htmlLink ? `\nView in Google Calendar: ${updatedEvent.htmlLink}` : ''}`,
           modifiedEvents: true,
