@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { clearSession } from '@/lib/auth/session'
-import { DEFAULT_APP_URL } from '@/lib/constants'
+import { APP_URL } from '@/lib/constants'
 
 export async function POST() {
   await clearSession()
@@ -9,7 +9,7 @@ export async function POST() {
 
 export async function GET() {
   await clearSession()
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || DEFAULT_APP_URL
+  const baseUrl = APP_URL
   return NextResponse.redirect(new URL('/', baseUrl))
 }
 

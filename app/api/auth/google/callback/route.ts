@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTokensFromCode, getUserInfo } from '@/lib/google/oauth'
 import { setSession } from '@/lib/auth/session'
-import { DEFAULT_APP_URL } from '@/lib/constants'
+import { APP_URL } from '@/lib/constants'
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const code = searchParams.get('code')
   const error = searchParams.get('error')
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || DEFAULT_APP_URL
+  const baseUrl = APP_URL
 
   if (error) {
     console.error('OAuth error:', error)

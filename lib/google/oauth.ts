@@ -1,5 +1,5 @@
 import { google } from 'googleapis'
-import { DEFAULT_APP_URL } from '@/lib/constants'
+import { APP_URL } from '@/lib/constants'
 
 const SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
@@ -11,7 +11,7 @@ const SCOPES = [
 export function getOAuthClient() {
   const clientId = process.env.GOOGLE_CLIENT_ID
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || DEFAULT_APP_URL
+  const appUrl = APP_URL
   const redirectUri = `${appUrl}/api/auth/google/callback`
 
   console.log('[OAuth] Redirect URI:', redirectUri)
