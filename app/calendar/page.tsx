@@ -290,8 +290,8 @@ export default function Calendar() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-900">
-        <div className="w-8 h-8 border-2 border-zinc-300 dark:border-zinc-700 border-t-blue-500 dark:border-t-blue-400 rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-stone-50 dark:bg-stone-950">
+        <div className="w-10 h-10 border-3 border-stone-200 dark:border-stone-800 border-t-primary-500 dark:border-t-primary-400 rounded-full animate-spin" />
       </div>
     )
   }
@@ -301,31 +301,31 @@ export default function Calendar() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-white transition-colors">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 transition-colors">
       {/* Header */}
-      <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+      <header className="border-b border-stone-200/60 dark:border-stone-800/60 bg-white/80 dark:bg-stone-950/80 backdrop-blur-xl sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-sm shadow-primary-500/20">
                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </div>
-              <span className="font-semibold text-lg">Calendar</span>
+              <span className="font-semibold text-lg tracking-tight">Calendar</span>
             </div>
 
             <div className="flex items-center gap-4">
               {user && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   {user.picture && (
                     <img
                       src={user.picture}
                       alt={user.name}
-                      className="w-8 h-8 rounded-full"
+                      className="w-8 h-8 rounded-full ring-2 ring-stone-200 dark:ring-stone-800"
                     />
                   )}
-                  <span className="text-sm text-zinc-600 dark:text-zinc-400 hidden sm:inline">
+                  <span className="text-sm text-stone-600 dark:text-stone-400 hidden sm:inline font-medium">
                     {user.email}
                   </span>
                 </div>
@@ -333,7 +333,7 @@ export default function Calendar() {
               <ThemeToggle />
               <button
                 onClick={signOut}
-                className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                className="text-sm text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors font-medium"
               >
                 Sign out
               </button>

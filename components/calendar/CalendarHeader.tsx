@@ -29,19 +29,19 @@ export function CalendarHeader({
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
       <div className="flex items-center gap-4 flex-wrap">
-        <h1 className="text-2xl font-semibold">{currentPeriod}</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{currentPeriod}</h1>
 
         <div className="flex items-center gap-2">
           {/* View Mode Switcher */}
-          <div className="inline-flex bg-zinc-100 dark:bg-zinc-800 rounded-lg p-1">
+          <div className="inline-flex bg-stone-100 dark:bg-stone-900 rounded-xl p-1 border border-stone-200/50 dark:border-stone-800/50">
             {views.map((view) => (
               <button
                 key={view.mode}
                 onClick={() => onViewModeChange(view.mode)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                className={`px-3 py-1.5 text-sm font-semibold rounded-lg transition-all ${
                   viewMode === view.mode
-                    ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white shadow-sm'
-                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                    ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-sm'
+                    : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
                 }`}
               >
                 {view.label}
@@ -52,7 +52,7 @@ export function CalendarHeader({
           {/* Today Button */}
           <button
             onClick={onToday}
-            className="px-3 py-1.5 text-sm bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 rounded-lg transition-colors"
+            className="px-3.5 py-1.5 text-sm font-semibold bg-primary-50 hover:bg-primary-100 dark:bg-primary-900/30 dark:hover:bg-primary-900/50 text-primary-700 dark:text-primary-400 rounded-xl transition-all"
           >
             Today
           </button>
@@ -61,7 +61,7 @@ export function CalendarHeader({
           <button
             onClick={onRefresh}
             disabled={isLoading}
-            className="p-1.5 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors disabled:opacity-50"
+            className="p-2 text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-900 rounded-xl transition-colors disabled:opacity-50"
             title="Refresh calendar"
           >
             <svg
@@ -85,7 +85,7 @@ export function CalendarHeader({
       <div className="flex items-center gap-2">
         <button
           onClick={() => onNavigate('prev')}
-          className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+          className="p-2.5 hover:bg-stone-100 dark:hover:bg-stone-900 rounded-xl transition-colors text-stone-700 dark:text-stone-300"
           aria-label="Previous"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -94,7 +94,7 @@ export function CalendarHeader({
         </button>
         <button
           onClick={() => onNavigate('next')}
-          className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+          className="p-2.5 hover:bg-stone-100 dark:hover:bg-stone-900 rounded-xl transition-colors text-stone-700 dark:text-stone-300"
           aria-label="Next"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

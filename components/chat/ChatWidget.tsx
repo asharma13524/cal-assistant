@@ -208,10 +208,10 @@ export function ChatWidget() {
       {/* Chat Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-6 right-6 z-50 flex items-center justify-center w-14 h-14 rounded-full shadow-lg transition-all duration-300 ${
+        className={`fixed bottom-6 right-6 z-50 flex items-center justify-center w-14 h-14 rounded-full shadow-xl transition-all duration-300 ${
           isOpen
-            ? 'bg-zinc-600 dark:bg-zinc-700 hover:bg-zinc-500 dark:hover:bg-zinc-600 rotate-0'
-            : 'bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500 hover:from-blue-600 hover:to-blue-700 dark:hover:from-blue-500 dark:hover:to-blue-600 shadow-blue-500/25'
+            ? 'bg-stone-700 dark:bg-stone-800 hover:bg-stone-600 dark:hover:bg-stone-700 rotate-0 scale-100'
+            : 'bg-gradient-to-br from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 shadow-primary-500/30 scale-100 hover:scale-105'
         }`}
         aria-label={isOpen ? 'Close chat assistant' : 'Open chat assistant'}
       >
@@ -228,43 +228,44 @@ export function ChatWidget() {
 
       {/* Chat Panel */}
       <div
-        className={`fixed bottom-24 right-6 z-40 w-[420px] max-w-[calc(100vw-3rem)] bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden transition-all duration-300 ${
+        className={`fixed bottom-24 right-6 z-40 w-[440px] max-w-[calc(100vw-3rem)] bg-white dark:bg-stone-950 rounded-3xl shadow-2xl border border-stone-200/50 dark:border-stone-800/50 backdrop-blur-xl overflow-hidden transition-all duration-300 ${
           isOpen
-            ? 'opacity-100 translate-y-0 pointer-events-auto'
-            : 'opacity-0 translate-y-4 pointer-events-none'
+            ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto'
+            : 'opacity-0 translate-y-4 scale-95 pointer-events-none'
         }`}
       >
         {/* Header */}
-        <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/80 backdrop-blur">
+        <div className="px-5 py-4 border-b border-stone-200/60 dark:border-stone-800/60 bg-gradient-to-b from-stone-50/90 to-white/90 dark:from-stone-900/90 dark:to-stone-950/90 backdrop-blur-sm">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-sm shadow-primary-500/20">
               <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-zinc-900 dark:text-white">Calendar Assistant</h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-500"></p>
+              <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100 tracking-tight">Calendar Assistant</h3>
+              <p className="text-xs text-stone-500 dark:text-stone-400"></p>
             </div>
           </div>
         </div>
 
         {/* Messages */}
-        <div className="h-96 overflow-y-auto p-4 space-y-4 bg-zinc-50 dark:bg-zinc-900">
+        <div className="h-96 overflow-y-auto p-5 space-y-3 bg-stone-50/40 dark:bg-stone-950/40">
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="w-12 h-12 rounded-xl bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center mb-3">
-                <svg className="w-6 h-6 text-zinc-500 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex flex-col items-center justify-center h-full text-center px-2">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/30 dark:to-primary-800/30 flex items-center justify-center mb-4 shadow-sm">
+                <svg className="w-7 h-7 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
               </div>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">Ask me about your calendar</p>
-              <div className="space-y-2 w-full px-2">
+              <p className="text-sm font-medium text-stone-700 dark:text-stone-300 mb-1">Ask about your calendar</p>
+              <p className="text-xs text-stone-500 dark:text-stone-500 mb-5">I can help you schedule, check availability, and more</p>
+              <div className="space-y-2 w-full">
                 {suggestedQuestions.map((question, i) => (
                   <button
                     key={i}
                     onClick={() => setInput(question)}
-                    className="w-full text-left text-xs px-3 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    className="w-full text-left text-xs px-3.5 py-2.5 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-400 hover:border-primary-300 dark:hover:border-primary-700 hover:text-primary-700 dark:hover:text-primary-400 transition-all hover:shadow-sm font-medium"
                   >
                     {question}
                   </button>
@@ -275,15 +276,15 @@ export function ChatWidget() {
             messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} message-enter`}
               >
                 <div
-                  className={`max-w-[85%] px-3 py-2 rounded-xl text-sm whitespace-pre-wrap ${
+                  className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm whitespace-pre-wrap ${
                     message.role === 'user'
-                      ? 'bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500 text-white'
+                      ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-md shadow-primary-500/20 font-medium'
                       : message.role === 'status'
-                      ? 'bg-transparent text-zinc-500 dark:text-zinc-500 italic text-xs px-2 py-1'
-                      : 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700'
+                      ? 'bg-transparent text-stone-500 dark:text-stone-500 italic text-xs px-2 py-1 status-pulse'
+                      : 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border border-stone-200/60 dark:border-stone-800/60 shadow-sm leading-relaxed'
                   }`}
                 >
                   {message.content}
@@ -292,12 +293,12 @@ export function ChatWidget() {
             ))
           )}
           {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-4 py-2 rounded-xl">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            <div className="flex justify-start message-enter">
+              <div className="bg-white dark:bg-stone-900 border border-stone-200/60 dark:border-stone-800/60 px-4 py-3 rounded-2xl shadow-sm">
+                <div className="flex gap-1.5">
+                  <div className="w-2 h-2 bg-primary-400 dark:bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 bg-primary-400 dark:bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 bg-primary-400 dark:bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
             </div>
@@ -306,19 +307,19 @@ export function ChatWidget() {
         </div>
 
         {/* Input */}
-        <form onSubmit={handleSubmit} className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+        <form onSubmit={handleSubmit} className="p-4 border-t border-stone-200/60 dark:border-stone-800/60 bg-gradient-to-b from-white/90 to-stone-50/90 dark:from-stone-950/90 dark:to-stone-900/90 backdrop-blur-sm">
           <div className="flex gap-2">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask about your calendar..."
-              className="flex-1 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 dark:focus:ring-blue-400/50 focus:border-blue-500 dark:focus:border-blue-400"
+              className="flex-1 px-4 py-2.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-primary-500/40 dark:focus:ring-primary-400/40 focus:border-primary-400 dark:focus:border-primary-500 transition-all"
             />
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
-              className="px-3 py-2 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 dark:hover:from-blue-500 dark:hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="px-4 py-2.5 bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm shadow-primary-500/20 hover:shadow-md hover:shadow-primary-500/30 disabled:shadow-none"
               aria-label="Send message"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

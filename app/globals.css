@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -17,6 +19,7 @@ body {
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'ss01' on, 'ss02' on, 'cv01' on;
 }
 
 /* Custom scrollbar */
@@ -27,26 +30,56 @@ body {
 
 /* Light mode scrollbar */
 ::-webkit-scrollbar-track {
-  @apply bg-zinc-100;
+  @apply bg-stone-100;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-zinc-400 rounded;
+  @apply bg-stone-300 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-zinc-500;
+  @apply bg-stone-400;
 }
 
 /* Dark mode scrollbar */
 .dark ::-webkit-scrollbar-track {
-  @apply bg-zinc-800;
+  @apply bg-stone-900;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  @apply bg-zinc-600 rounded;
+  @apply bg-stone-700 rounded-full;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  @apply bg-zinc-500;
+  @apply bg-stone-600;
+}
+
+/* Chat message animations */
+@keyframes message-appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.message-enter {
+  animation: message-appear 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Subtle pulse for status messages */
+@keyframes status-pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.status-pulse {
+  animation: status-pulse 2s ease-in-out infinite;
 }
