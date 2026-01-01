@@ -3,6 +3,20 @@ import { USER_TIMEZONE } from '@/lib/constants'
 
 export const calendarTools: Tool[] = [
   {
+    name: 'get_date_info',
+    description: 'Get accurate date and time information. Use this to find out what date a specific day of the week falls on, or to get date ranges for relative terms like "next week". ALWAYS call this tool before creating events to ensure you have the correct dates.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: {
+          type: 'string',
+          description: 'What date information you need. Examples: "next Monday", "next week", "tomorrow", "what day is 2026-01-05", "current date and time"',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'get_calendar_events',
     description: 'Get calendar events for a specific date range. Use this to see what meetings are scheduled.',
     input_schema: {
@@ -168,7 +182,7 @@ export const calendarTools: Tool[] = [
   },
   {
     name: 'draft_email',
-    description: 'Draft an email for scheduling or calendar-related communication. Returns the email content that the user can review and send.',
+    description: 'Signal that you need to compose an email draft for scheduling or calendar-related communication. This tool does NOT generate the email - it returns a prompt for you to compose the email yourself in your response. Use this when the user asks you to draft/write/compose an email.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -183,12 +197,12 @@ export const calendarTools: Tool[] = [
         },
         context: {
           type: 'string',
-          description: 'The main body text of the email. Write this as the actual content to appear in the email, addressing the recipients directly in second person (you/your). Example: "I wanted to let you know that I\'ll be blocking off my mornings from 8-10 AM for workouts. Please avoid scheduling meetings during that time."',
+          description: 'Brief context about what the email should communicate (e.g., "notify team about OoO next week", "request meeting reschedule", "inform about calendar block"). You will compose the actual email body based on this context.',
         },
         tone: {
           type: 'string',
           enum: ['formal', 'casual', 'friendly'],
-          description: 'The tone of the email',
+          description: 'The tone for the email (formal, casual, or friendly)',
         },
       },
       required: ['to', 'subject', 'context'],
@@ -218,14 +232,28 @@ export function getSystemPrompt(): string {
 
   return `You are a helpful calendar assistant with access to the user's Google Calendar.
 
-## ⏰ CURRENT DATE AND TIME (USE THIS FOR ALL DATE CALCULATIONS):
+## ⏰ CURRENT DATE AND TIME:
 - **Today is: ${todayStr}**
 - **ISO format: ${todayISO}**
 - **Current time: ${currentTime}**
 - **Timezone: ${userTimezone}**
 
+## 🚨 CRITICAL: DATE CALCULATIONS
+**NEVER calculate dates yourself. Your internal date calculations may be incorrect.**
+
+⚠️ **MANDATORY: Use the get_date_info tool for ANY date-related questions:**
+- Before creating events for "next week", call get_date_info with query "next week"
+- Before creating an event for "next Monday", call get_date_info with query "next Monday"
+- If unsure what day a date is, call get_date_info with the date
+- ALWAYS call get_date_info first, then use the exact dates it returns
+
+**Example workflow:**
+1. User says "create OoO events for next week"
+2. You call get_date_info with query "next week"
+3. Tool returns the actual dates (e.g., Monday = 2026-01-05, Tuesday = 2026-01-06, etc.)
+4. You use those EXACT dates to create the events
+
 IMPORTANT:
-- The current YEAR is ${now.getFullYear()}. When scheduling future events, use ${now.getFullYear()} or ${now.getFullYear() + 1} as appropriate.
 - All times are in the user's local timezone (${userTimezone}). When the user says "1 PM", generate "13:00:00" - the system handles timezone conversion.
 
 ## Your capabilities:
@@ -283,11 +311,12 @@ IMPORTANT:
 - Proactively mention conflicts or potential issues
 
 ### Email Drafts - IMPORTANT
-When you draft an email using the draft_email tool:
-- The tool returns the complete email draft
-- You MUST include the FULL email content in your response - copy it exactly as returned
-- Do NOT just say "Here's your email draft" without showing the actual email
-- The user needs to see the To, Subject, and Body to copy it
+When the user asks you to draft an email:
+1. Call the draft_email tool with to, subject, context, and tone
+2. The tool will return a compose prompt with the email metadata
+3. YOU must then compose the actual email in your text response
+4. Format it clearly with To, Subject, and Body so the user can copy it
+5. Use proper email etiquette: greeting, body, sign-off based on the tone
 
 Remember: Check availability first, then create. Never schedule conflicts without user confirmation.`
 }

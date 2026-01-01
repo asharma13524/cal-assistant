@@ -24,6 +24,93 @@ interface ToolExecutionResult {
   modifiedEvents: boolean
 }
 
+function getDateInfo(query: string): string {
+  const now = new Date()
+  const queryLower = query.toLowerCase()
+
+  // Helper to get day of week name
+  const getDayName = (date: Date): string => {
+    return date.toLocaleDateString('en-US', { weekday: 'long', timeZone: USER_TIMEZONE })
+  }
+
+  // Helper to format date
+  const formatDate = (date: Date): string => {
+    return date.toLocaleDateString('en-CA', { timeZone: USER_TIMEZONE }) // YYYY-MM-DD
+  }
+
+  // Current date and time
+  if (queryLower.includes('current') || queryLower.includes('now') || queryLower.includes('today')) {
+    const dayName = getDayName(now)
+    const dateStr = formatDate(now)
+    const timeStr = now.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: USER_TIMEZONE
+    })
+    return `Current date: ${dayName}, ${dateStr} at ${timeStr} (${USER_TIMEZONE})`
+  }
+
+  // Tomorrow
+  if (queryLower.includes('tomorrow')) {
+    const tomorrow = new Date(now)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    return `Tomorrow is ${getDayName(tomorrow)}, ${formatDate(tomorrow)}`
+  }
+
+  // Next week - calculate Monday through Friday of next week
+  if (queryLower.includes('next week')) {
+    const currentDay = now.getDay() // 0 = Sunday, 1 = Monday, etc.
+    const daysUntilNextMonday = currentDay === 0 ? 1 : 8 - currentDay
+
+    const nextMonday = new Date(now)
+    nextMonday.setDate(now.getDate() + daysUntilNextMonday)
+
+    const dates = []
+    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(nextMonday)
+      date.setDate(nextMonday.getDate() + i)
+      dates.push(`${dayNames[i]} = ${formatDate(date)}`)
+    }
+
+    return `Next week (business days):\n${dates.join('\n')}`
+  }
+
+  // Next [specific day]
+  const dayMatch = queryLower.match(/next (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/)
+  if (dayMatch) {
+    const targetDayName = dayMatch[1]
+    const dayMap: Record<string, number> = {
+      'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
+      'thursday': 4, 'friday': 5, 'saturday': 6
+    }
+
+    const targetDay = dayMap[targetDayName]
+    const currentDay = now.getDay()
+
+    let daysUntilTarget = targetDay - currentDay
+    if (daysUntilTarget <= 0) {
+      daysUntilTarget += 7
+    }
+
+    const nextDate = new Date(now)
+    nextDate.setDate(now.getDate() + daysUntilTarget)
+
+    return `Next ${targetDayName.charAt(0).toUpperCase() + targetDayName.slice(1)} is ${formatDate(nextDate)}`
+  }
+
+  // What day is [specific date]
+  const dateMatch = queryLower.match(/(\d{4}-\d{2}-\d{2})/)
+  if (dateMatch) {
+    const dateStr = dateMatch[1]
+    const date = new Date(dateStr + 'T12:00:00') // Use noon to avoid timezone issues
+    return `${dateStr} is a ${getDayName(date)}`
+  }
+
+  return `Current date: ${getDayName(now)}, ${formatDate(now)}`
+}
+
 async function executeToolCall(
   toolName: string,
   toolInput: Record<string, unknown>,
@@ -31,6 +118,15 @@ async function executeToolCall(
 ): Promise<ToolExecutionResult> {
   try {
     switch (toolName) {
+      case 'get_date_info': {
+        const query = toolInput.query as string
+        const result = getDateInfo(query)
+        return {
+          content: result,
+          modifiedEvents: false,
+        }
+      }
+
       case 'get_calendar_events': {
         // Parse dates with proper handling for date-only strings
         let startDate: Date
@@ -247,22 +343,17 @@ async function executeToolCall(
         const context = toolInput.context as string
         const tone = (toolInput.tone as string) || 'friendly'
 
-        const emailBody = generateEmailBody(context, tone, recipients)
-
-        // Return a structured email draft with clear formatting
+        // Return a compose prompt for Claude to write the actual email
         return {
-          content: `📧 EMAIL DRAFT
+          content: `📧 COMPOSE EMAIL REQUEST
 ═══════════════════════════════════
 
 To: ${recipients.join(', ')}
 Subject: ${subject}
+Tone: ${tone}
+Context: ${context}
 
-───────────────────────────────────
-
-${emailBody}
-
-═══════════════════════════════════
-Copy the above and send via your email client.`,
+Now compose the full email draft for the user to copy. Include proper greeting, body, and sign-off based on the ${tone} tone.`,
           modifiedEvents: false,
         }
       }
@@ -280,31 +371,6 @@ Copy the above and send via your email client.`,
       modifiedEvents: false,
     }
   }
-}
-
-function generateEmailBody(context: string, tone: string, recipients: string[]): string {
-  const greeting = tone === 'formal' ? 'Dear' : tone === 'casual' ? 'Hey' : 'Hi'
-  const signoff = tone === 'formal' ? 'Best regards' : tone === 'casual' ? 'Cheers' : 'Best'
-
-  // Format recipients properly for greeting
-  let recipientGreeting: string
-  if (recipients.length === 0) {
-    recipientGreeting = 'there'
-  } else if (recipients.length === 1) {
-    recipientGreeting = recipients[0]
-  } else if (recipients.length === 2) {
-    recipientGreeting = `${recipients[0]} and ${recipients[1]}`
-  } else {
-    const last = recipients[recipients.length - 1]
-    const rest = recipients.slice(0, -1).join(', ')
-    recipientGreeting = `${rest}, and ${last}`
-  }
-
-  return `${greeting} ${recipientGreeting},
-
-${context}
-
-${signoff}`
 }
 
 export async function POST(request: NextRequest) {
