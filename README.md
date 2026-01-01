@@ -1,18 +1,32 @@
 # Calendar Assistant
 
-AI-powered calendar management and scheduling assistant built for a take-home assignment.
+AI-powered calendar management and scheduling assistant that lets you manage your Google Calendar through natural conversation.
+
+## Live Demo
+
+🔗 **[cal-assistant.vercel.app](https://cal-assistant.vercel.app)**
 
 ## Features
 
-- 🔐 Google OAuth integration for calendar access
-- 📅 Clean calendar view and event management
-- 🤖 AI chat interface powered by Claude
-- 🌓 Light/dark mode support
+- 🔐 **Google OAuth** - Secure authentication with Google Calendar access
+- 📅 **Multiple Calendar Views** - Day, Week, Month, and Year views with smooth navigation
+- 🤖 **AI Chat Assistant** - Natural language interface powered by Claude
+  - View and search events ("What meetings do I have tomorrow?")
+  - Create events ("Schedule a meeting with Joe at 3pm")
+  - Update and delete events ("Cancel my 2pm meeting")
+  - Manage attendees ("Add sarah@email.com to the team sync")
+  - Draft scheduling emails ("Write an email to the team about blocking my mornings")
+  - Analyze calendar usage ("How much time am I spending in meetings?")
+- ⚡ **Smart Conflict Detection** - Warns before double-booking
+- 🌓 **Light/Dark Mode** - System-aware theme toggle
 
 ## Tech Stack
 
-- **Frontend**: Next.js 16 with App Router, TypeScript, Tailwind CSS
-- **APIs**: Google Calendar API, Anthropic Claude API
+- **Framework**: Next.js 15 with App Router, React 19, TypeScript
+- **Styling**: Tailwind CSS
+- **AI**: Anthropic Claude API with tool use
+- **Calendar**: Google Calendar API
+- **Data Fetching**: SWR for real-time updates
 - **Deployment**: Vercel
 
 ## Getting Started
@@ -80,14 +94,9 @@ AI-powered calendar management and scheduling assistant built for a take-home as
 5. Session stored in HTTP-only cookies
 6. User redirected to `/calendar`
 
-## Development Status
+## Architecture Highlights
 
-- ✅ Project scaffold with Next.js 16
-- ✅ Google OAuth integration
-- ✅ Session management with cookies
-- ✅ Clean calendar UI with month navigation
-- ✅ Chat widget (collapsed by default)
-- ✅ Light/dark mode toggle
-- ⏳ Google Calendar API data fetching
-- ⏳ AI chat with Claude tool use
-- ⏳ Event creation/modification
+- **Tool-based AI**: Claude uses structured tools (not just prompts) to interact with Google Calendar, ensuring reliable and predictable actions
+- **Timezone-aware**: All operations respect the user's local timezone
+- **Optimistic UI**: Calendar updates instantly with SWR revalidation
+- **Secure sessions**: HTTP-only cookies with encrypted tokens, automatic refresh handling
