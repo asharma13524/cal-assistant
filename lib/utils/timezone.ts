@@ -5,8 +5,8 @@ import { USER_TIMEZONE } from '@/lib/constants'
 /**
  * Parse an ISO datetime string as if it's in the user's timezone.
  * Returns a proper Date object (UTC internally).
- * 
- * Example: parseInUserTimezone("2025-12-31T17:00:00") 
+ *
+ * Example: parseInUserTimezone("2025-12-31T17:00:00")
  *          → Date representing 5 PM EST (which is 10 PM UTC)
  */
 export function parseInUserTimezone(isoDateStr: string): Date {

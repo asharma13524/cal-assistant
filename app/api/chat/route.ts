@@ -4,12 +4,12 @@ import { calendarTools, getSystemPrompt } from '@/lib/anthropic/tools'
 import { getValidAccessToken, getSession } from '@/lib/auth/session'
 import { getCalendarEvents, getCalendarStats, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, addEventAttendee, removeEventAttendee } from '@/lib/google/calendar'
 import { CLAUDE_MODEL, CLAUDE_MAX_TOKENS, USER_TIMEZONE } from '@/lib/constants'
-import { 
-  parseInUserTimezone, 
-  isTimeInPast, 
-  formatTimeInUserTimezone, 
-  formatDateInUserTimezone, 
-  formatDateTimeInUserTimezone 
+import {
+  parseInUserTimezone,
+  isTimeInPast,
+  formatTimeInUserTimezone,
+  formatDateInUserTimezone,
+  formatDateTimeInUserTimezone
 } from '@/lib/utils/timezone'
 import type { UpdateEventData } from '@/lib/types/calendar'
 import type { MessageParam, ContentBlock, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages'
@@ -150,7 +150,7 @@ async function executeToolCall(
       case 'create_calendar_event': {
         // Validate: prevent creating events in the past
         const startTimeStr = toolInput.start_time as string
-        
+
         if (isTimeInPast(startTimeStr)) {
           const startTime = parseInUserTimezone(startTimeStr)
           const tomorrow = new Date(startTime)
