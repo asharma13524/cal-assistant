@@ -247,15 +247,22 @@ async function executeToolCall(
         const context = toolInput.context as string
         const tone = (toolInput.tone as string) || 'friendly'
 
-        // Return a signal for Claude to compose the email
+        const emailBody = generateEmailBody(context, tone, recipients)
+
+        // Return a structured email draft with clear formatting
         return {
-          content: `📧 COMPOSE EMAIL REQUEST
+          content: `📧 EMAIL DRAFT
+═══════════════════════════════════
+
 To: ${recipients.join(', ')}
 Subject: ${subject}
-Tone: ${tone}
-Context: ${context}
 
-Now compose the full email draft with proper greeting, body, and sign-off for the user to copy.`,
+───────────────────────────────────
+
+${emailBody}
+
+═══════════════════════════════════
+Copy the above and send via your email client.`,
           modifiedEvents: false,
         }
       }
@@ -273,6 +280,31 @@ Now compose the full email draft with proper greeting, body, and sign-off for th
       modifiedEvents: false,
     }
   }
+}
+
+function generateEmailBody(context: string, tone: string, recipients: string[]): string {
+  const greeting = tone === 'formal' ? 'Dear' : tone === 'casual' ? 'Hey' : 'Hi'
+  const signoff = tone === 'formal' ? 'Best regards' : tone === 'casual' ? 'Cheers' : 'Best'
+
+  // Format recipients properly for greeting
+  let recipientGreeting: string
+  if (recipients.length === 0) {
+    recipientGreeting = 'there'
+  } else if (recipients.length === 1) {
+    recipientGreeting = recipients[0]
+  } else if (recipients.length === 2) {
+    recipientGreeting = `${recipients[0]} and ${recipients[1]}`
+  } else {
+    const last = recipients[recipients.length - 1]
+    const rest = recipients.slice(0, -1).join(', ')
+    recipientGreeting = `${rest}, and ${last}`
+  }
+
+  return `${greeting} ${recipientGreeting},
+
+${context}
+
+${signoff}`
 }
 
 export async function POST(request: NextRequest) {

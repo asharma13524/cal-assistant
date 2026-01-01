@@ -168,7 +168,7 @@ export const calendarTools: Tool[] = [
   },
   {
     name: 'draft_email',
-    description: 'Signal that you need to compose an email for scheduling or calendar-related communication. This tool returns the email parameters back to you - you will then compose the actual email content in your response to the user.',
+    description: 'Draft an email for scheduling or calendar-related communication. Returns the email content that the user can review and send.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -183,12 +183,12 @@ export const calendarTools: Tool[] = [
         },
         context: {
           type: 'string',
-          description: 'The scheduling context and key information to include in the email. Describe what needs to be communicated (e.g., "Meeting scheduled for tomorrow at 2PM", "Need to reschedule Friday\'s meeting", "Blocking calendar for vacation").',
+          description: 'The main body text of the email. Write this as the actual content to appear in the email, addressing the recipients directly in second person (you/your). Example: "I wanted to let you know that I\'ll be blocking off my mornings from 8-10 AM for workouts. Please avoid scheduling meetings during that time."',
         },
         tone: {
           type: 'string',
           enum: ['formal', 'casual', 'friendly'],
-          description: 'The desired tone for the email',
+          description: 'The tone of the email',
         },
       },
       required: ['to', 'subject', 'context'],
@@ -216,37 +216,6 @@ export function getSystemPrompt(): string {
   const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: userTimezone }) // en-CA gives YYYY-MM-DD
   const todayISO = formatter.format(now)
 
-  // Generate reference calendar for current month and next month
-  const generateMonthCalendar = (year: number, month: number): string => {
-    const monthName = new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', timeZone: userTimezone })
-    const daysInMonth = new Date(year, month + 1, 0).getDate()
-    const lines: string[] = [`${monthName} ${year}:`]
-
-    let weekLine = '  '
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day)
-      const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'short', timeZone: userTimezone })
-
-      weekLine += `${day}(${dayOfWeek}) `
-
-      // Start a new line every Sunday or at the end of the month
-      if (dayOfWeek === 'Sun' || day === daysInMonth) {
-        lines.push(weekLine.trimEnd())
-        weekLine = '  '
-      }
-    }
-
-    return lines.join('\n')
-  }
-
-  const currentMonth = now.getMonth()
-  const currentYear = now.getFullYear()
-  const nextMonth = (currentMonth + 1) % 12
-  const nextMonthYear = currentMonth === 11 ? currentYear + 1 : currentYear
-
-  const currentMonthCalendar = generateMonthCalendar(currentYear, currentMonth)
-  const nextMonthCalendar = generateMonthCalendar(nextMonthYear, nextMonth)
-
   return `You are a helpful calendar assistant with access to the user's Google Calendar.
 
 ## ⏰ CURRENT DATE AND TIME (USE THIS FOR ALL DATE CALCULATIONS):
@@ -254,24 +223,6 @@ export function getSystemPrompt(): string {
 - **ISO format: ${todayISO}**
 - **Current time: ${currentTime}**
 - **Timezone: ${userTimezone}**
-
-## 🚨 CRITICAL: YEAR CONTEXT
-**THE CURRENT YEAR IS ${now.getFullYear()}. DO NOT USE 2024 OR 2025 DATES.**
-- When users say "January 5th", they mean ${nextMonth === 0 ? currentYear + 1 : currentYear}
-- All dates without a specified year should be in ${now.getFullYear()} or ${now.getFullYear() + 1}
-- **NEVER assume or guess what day of the week a date falls on**
-- **DO NOT rely on your training data for day-of-week calculations**
-- Your training data from 2025 will give WRONG answers for 2026 dates
-
-## 📅 REFERENCE CALENDAR - CONSULT THIS FOR EVERY DATE:
-**MANDATORY: Before mentioning any day of the week, LOOK IT UP in the calendar below.**
-Example: If user says "January 5th", find "5(Mon)" in the calendar = Monday
-
-${currentMonthCalendar}
-
-${nextMonthCalendar}
-
-**LOOKUP RULE**: For ANY date mentioned, find the number in the calendar above and read the day abbreviation in parentheses. That is the ONLY correct day of the week.
 
 IMPORTANT:
 - The current YEAR is ${now.getFullYear()}. When scheduling future events, use ${now.getFullYear()} or ${now.getFullYear() + 1} as appropriate.
@@ -333,10 +284,10 @@ IMPORTANT:
 
 ### Email Drafts - IMPORTANT
 When you draft an email using the draft_email tool:
-- The tool returns a signal with the email parameters (recipients, subject, context, tone)
-- You MUST then compose the full email in your text response
-- Write the complete email with proper greeting, body, and sign-off based on the tone
-- Format it clearly so the user can copy it to their email client
+- The tool returns the complete email draft
+- You MUST include the FULL email content in your response - copy it exactly as returned
+- Do NOT just say "Here's your email draft" without showing the actual email
+- The user needs to see the To, Subject, and Body to copy it
 
 Remember: Check availability first, then create. Never schedule conflicts without user confirmation.`
 }
