@@ -24,6 +24,22 @@ interface ToolExecutionResult {
   modifiedEvents: boolean
 }
 
+function getToolStatusMessage(toolName: string): string {
+  const messages: Record<string, string> = {
+    'get_date_info': 'Getting date information...',
+    'get_calendar_events': 'Checking your calendar...',
+    'check_availability': 'Checking availability...',
+    'get_calendar_stats': 'Calculating calendar statistics...',
+    'create_calendar_event': 'Creating event...',
+    'update_calendar_event': 'Updating event...',
+    'delete_calendar_event': 'Deleting event...',
+    'add_attendee': 'Adding attendee...',
+    'remove_attendee': 'Removing attendee...',
+    'draft_email': 'Drafting email...',
+  }
+  return messages[toolName] || `Executing ${toolName}...`
+}
+
 function getDateInfo(query: string): string {
   const now = new Date()
   const queryLower = query.toLowerCase()
@@ -404,85 +420,134 @@ export async function POST(request: NextRequest) {
     const calendarKeywords = /\b(meeting|event|calendar|schedule|busy|free|available|book|cancel|delete|remove|create|add|update|change|reschedule|time|today|tomorrow|week|month|how much|how many)\b/i
     const shouldForceToolUse = calendarKeywords.test(message)
 
-    // Initial API call - force tool use for calendar-related questions
-    let response = await client.messages.create({
-      model: CLAUDE_MODEL,
-      max_tokens: CLAUDE_MAX_TOKENS,
-      system: getSystemPrompt(),
-      tools: calendarTools,
-      messages,
-      // Force Claude to use at least one tool for calendar questions
-      ...(shouldForceToolUse && { tool_choice: { type: 'any' as const } }),
-    })
+    // Create a readable stream for streaming responses
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder()
+        const send = (data: any) => {
+          controller.enqueue(encoder.encode(JSON.stringify(data) + '\n'))
+        }
 
-    // Handle tool use in a loop
-    let eventsWereModified = false
-
-    while (response.stop_reason === 'tool_use') {
-      const toolUseBlocks = response.content.filter(
-        (block): block is Extract<ContentBlock, { type: 'tool_use' }> => block.type === 'tool_use'
-      )
-
-      // Execute tools individually to handle errors gracefully
-      const toolResults: ToolResultBlockParam[] = []
-      let anyToolModifiedEvents = false
-
-      for (const toolUse of toolUseBlocks) {
         try {
-          const result = await executeToolCall(
-            toolUse.name,
-            toolUse.input as Record<string, unknown>,
-            accessToken
-          )
+          let eventsWereModified = false
+          let currentMessages = [...messages]
 
-          // Track if any tool modified events
-          if (result.modifiedEvents) {
-            anyToolModifiedEvents = true
+          // Initial API call - force tool use for calendar-related questions
+          const initialStream = client.messages.stream({
+            model: CLAUDE_MODEL,
+            max_tokens: CLAUDE_MAX_TOKENS,
+            system: getSystemPrompt(),
+            tools: calendarTools,
+            messages: currentMessages,
+            // Force Claude to use at least one tool for calendar questions
+            ...(shouldForceToolUse && { tool_choice: { type: 'any' as const } }),
+          })
+
+          // Stream text deltas from initial response
+          for await (const event of initialStream) {
+            if (event.type === 'content_block_delta') {
+              if (event.delta.type === 'text_delta') {
+                send({ type: 'text_delta', content: event.delta.text })
+              }
+            }
           }
 
-          toolResults.push({
-            type: 'tool_result' as const,
-            tool_use_id: toolUse.id,
-            content: result.content,
-          })
+          // Get the final message
+          let response = await initialStream.finalMessage()
+
+          // Handle tool use in a loop
+          while (response.stop_reason === 'tool_use') {
+            const toolUseBlocks = response.content.filter(
+              (block): block is Extract<ContentBlock, { type: 'tool_use' }> => block.type === 'tool_use'
+            )
+
+            // Execute tools individually to handle errors gracefully
+            const toolResults: ToolResultBlockParam[] = []
+            let anyToolModifiedEvents = false
+
+            for (const toolUse of toolUseBlocks) {
+              try {
+                // Send status message before executing tool
+                send({ type: 'status', message: getToolStatusMessage(toolUse.name) })
+
+                const result = await executeToolCall(
+                  toolUse.name,
+                  toolUse.input as Record<string, unknown>,
+                  accessToken
+                )
+
+                // Track if any tool modified events
+                if (result.modifiedEvents) {
+                  anyToolModifiedEvents = true
+                }
+
+                toolResults.push({
+                  type: 'tool_result' as const,
+                  tool_use_id: toolUse.id,
+                  content: result.content,
+                })
+              } catch (error) {
+                console.error(`[Chat API] Tool execution failed for ${toolUse.name}:`, error)
+                send({
+                  type: 'error',
+                  message: `Error executing ${toolUse.name}: ${error instanceof Error ? error.message : 'Unknown error'}`
+                })
+                toolResults.push({
+                  type: 'tool_result' as const,
+                  tool_use_id: toolUse.id,
+                  content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'}`,
+                  is_error: true,
+                })
+              }
+            }
+
+            // Track across all tool execution loops
+            if (anyToolModifiedEvents) {
+              eventsWereModified = true
+            }
+
+            // Continue conversation with tool results
+            currentMessages.push({ role: 'assistant', content: response.content })
+            currentMessages.push({ role: 'user', content: toolResults })
+
+            // Stream the next response
+            const nextStream = client.messages.stream({
+              model: CLAUDE_MODEL,
+              max_tokens: CLAUDE_MAX_TOKENS,
+              system: getSystemPrompt(),
+              tools: calendarTools,
+              messages: currentMessages,
+            })
+
+            // Stream text deltas
+            for await (const event of nextStream) {
+              if (event.type === 'content_block_delta') {
+                if (event.delta.type === 'text_delta') {
+                  send({ type: 'text_delta', content: event.delta.text })
+                }
+              }
+            }
+
+            response = await nextStream.finalMessage()
+          }
+
+          // Send done message with metadata
+          send({ type: 'done', metadata: { modifiedEvents: eventsWereModified } })
+          controller.close()
         } catch (error) {
-          console.error(`[Chat API] Tool execution failed for ${toolUse.name}:`, error)
-          toolResults.push({
-            type: 'tool_result' as const,
-            tool_use_id: toolUse.id,
-            content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'}`,
-            is_error: true,
-          })
+          console.error('[Chat API] Streaming error:', error)
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          send({ type: 'error', message: `Failed to process chat message: ${errorMessage}` })
+          controller.close()
         }
-      }
+      },
+    })
 
-      // Track across all tool execution loops
-      if (anyToolModifiedEvents) {
-        eventsWereModified = true
-      }
-
-      // Continue conversation with tool results
-      messages.push({ role: 'assistant', content: response.content })
-      messages.push({ role: 'user', content: toolResults })
-
-      response = await client.messages.create({
-        model: CLAUDE_MODEL,
-        max_tokens: CLAUDE_MAX_TOKENS,
-        system: getSystemPrompt(),
-        tools: calendarTools,
-        messages,
-      })
-    }
-
-    // Extract text response
-    const textContent = response.content.find(
-      (block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text'
-    )
-
-    return NextResponse.json({
-      response: textContent?.text || 'I apologize, but I was unable to generate a response.',
-      metadata: {
-        modifiedEvents: eventsWereModified,
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
       },
     })
   } catch (error) {

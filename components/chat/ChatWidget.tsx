@@ -5,7 +5,7 @@ import { useSWRConfig } from 'swr'
 
 interface Message {
   id: string
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'status'
   content: string
 }
 
@@ -39,13 +39,19 @@ export function ChatWidget() {
     setInput('')
     setIsLoading(true)
 
+    // We'll create the assistant message when we receive the first text
+    const assistantMessageId = (Date.now() + 1).toString()
+
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMessage.content,
-          history: messages.map(m => ({ role: m.role, content: m.content }))
+          // Filter out status messages from history
+          history: messages
+            .filter(m => m.role !== 'status')
+            .map(m => ({ role: m.role, content: m.content }))
         })
       })
 
@@ -53,32 +59,139 @@ export function ChatWidget() {
         throw new Error('Failed to send message')
       }
 
-      const data = await response.json()
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.response
+      if (!response.body) {
+        throw new Error('No response body')
       }
-      setMessages(prev => [...prev, assistantMessage])
 
-      // Trigger cache revalidation if events were modified
-      if (data.metadata?.modifiedEvents) {
-        // Revalidate all calendar event caches - use undefined data + revalidate: true
-        mutate(
-          (key) => typeof key === 'string' && key.startsWith('/api/calendar/events'),
-          undefined,
-          { revalidate: true }
-        )
+      // Read the stream
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let hasReceivedText = false
+
+      while (true) {
+        const { done, value } = await reader.read()
+
+        if (done) break
+
+        // Decode the chunk and add to buffer
+        buffer += decoder.decode(value, { stream: true })
+
+        // Process complete lines (newline-delimited JSON)
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.trim()) continue
+
+          try {
+            const data = JSON.parse(line)
+
+            if (data.type === 'text_delta') {
+              // On first text delta, remove loading state and status messages
+              if (!hasReceivedText) {
+                hasReceivedText = true
+                setIsLoading(false)
+                setMessages(prev => {
+                  // Remove status messages and add the assistant message
+                  const filtered = prev.filter(msg => msg.role !== 'status')
+                  return [...filtered, {
+                    id: assistantMessageId,
+                    role: 'assistant' as const,
+                    content: data.content
+                  }]
+                })
+              } else {
+                // Append text to the assistant's message
+                setMessages(prev => prev.map(msg =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: msg.content + data.content }
+                    : msg
+                ))
+              }
+            } else if (data.type === 'status') {
+              // Add a status message
+              const statusMessage: Message = {
+                id: Date.now().toString() + Math.random(),
+                role: 'status',
+                content: data.message
+              }
+              setMessages(prev => [...prev, statusMessage])
+            } else if (data.type === 'done') {
+              // Trigger cache revalidation if events were modified
+              if (data.metadata?.modifiedEvents) {
+                mutate(
+                  (key) => typeof key === 'string' && key.startsWith('/api/calendar/events'),
+                  undefined,
+                  { revalidate: true }
+                )
+              }
+            } else if (data.type === 'error') {
+              // Show error in the assistant's message
+              setMessages(prev => {
+                const existing = prev.find(msg => msg.id === assistantMessageId)
+                if (existing) {
+                  return prev.map(msg =>
+                    msg.id === assistantMessageId
+                      ? { ...msg, content: msg.content + '\n\n⚠️ ' + data.message }
+                      : msg
+                  )
+                } else {
+                  // Create assistant message with error
+                  return [...prev.filter(msg => msg.role !== 'status'), {
+                    id: assistantMessageId,
+                    role: 'assistant' as const,
+                    content: '⚠️ ' + data.message
+                  }]
+                }
+              })
+            }
+          } catch (parseError) {
+            console.error('Error parsing stream chunk:', parseError, 'Line:', line)
+          }
+        }
       }
+
+      // If the assistant message doesn't exist or is empty, show a fallback
+      setMessages(prev => {
+        const existing = prev.find(msg => msg.id === assistantMessageId)
+        if (!existing) {
+          // No message received at all
+          return [...prev.filter(msg => msg.role !== 'status'), {
+            id: assistantMessageId,
+            role: 'assistant' as const,
+            content: 'I apologize, but I was unable to generate a response.'
+          }]
+        } else if (!existing.content.trim()) {
+          // Message exists but is empty
+          return prev.map(msg =>
+            msg.id === assistantMessageId
+              ? { ...msg, content: 'I apologize, but I was unable to generate a response.' }
+              : msg
+          )
+        }
+        return prev
+      })
     } catch (error) {
       console.error('Chat error:', error)
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.'
-      }
-      setMessages(prev => [...prev, errorMessage])
+      // Update or create the assistant message with error
+      setMessages(prev => {
+        const existing = prev.find(msg => msg.id === assistantMessageId)
+        if (existing) {
+          return prev.map(msg =>
+            msg.id === assistantMessageId
+              ? { ...msg, content: 'Sorry, I encountered an error. Please try again.' }
+              : msg
+          )
+        } else {
+          // Create assistant message with error
+          return [...prev.filter(msg => msg.role !== 'status'), {
+            id: assistantMessageId,
+            role: 'assistant' as const,
+            content: 'Sorry, I encountered an error. Please try again.'
+          }]
+        }
+      })
     } finally {
       setIsLoading(false)
     }
@@ -168,6 +281,8 @@ export function ChatWidget() {
                   className={`max-w-[85%] px-3 py-2 rounded-xl text-sm whitespace-pre-wrap ${
                     message.role === 'user'
                       ? 'bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500 text-white'
+                      : message.role === 'status'
+                      ? 'bg-transparent text-zinc-500 dark:text-zinc-500 italic text-xs px-2 py-1'
                       : 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700'
                   }`}
                 >
