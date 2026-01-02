@@ -25,19 +25,27 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ events })
   } catch (error) {
-    console.error('[Calendar API] Error:', error)
+    console.error('[Calendar API] Error fetching events:', error)
 
     // Check if it's an auth error
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     if (errorMessage.includes('invalid_grant') || errorMessage.includes('Invalid Credentials')) {
       return NextResponse.json(
-        { error: 'Session expired. Please sign in again.' },
+        { error: 'Your session has expired. Please sign in again.' },
         { status: 401 }
       )
     }
 
+    // Check for Google API errors
+    if (errorMessage.includes('insufficient permissions') || errorMessage.includes('Insufficient Permission')) {
+      return NextResponse.json(
+        { error: 'Calendar access denied. Please sign in again and grant calendar permissions.' },
+        { status: 403 }
+      )
+    }
+
     return NextResponse.json(
-      { error: 'Failed to fetch calendar events', details: errorMessage },
+      { error: `Unable to load calendar events. ${errorMessage}` },
       { status: 500 }
     )
   }

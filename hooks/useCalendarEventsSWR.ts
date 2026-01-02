@@ -42,6 +42,7 @@ export function useCalendarEventsSWR(options: UseCalendarEventsSWROptions = {}) 
       revalidateOnReconnect: true,
       // No polling - cache is invalidated when events are modified via chat
       onError: (err) => {
+        console.error('[Calendar] Failed to load events:', err.message)
         if (err.message === 'UNAUTHORIZED') {
           router.replace('/')
         }

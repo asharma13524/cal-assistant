@@ -69,7 +69,7 @@ export default function Calendar() {
     return result
   }, [viewMode, selectedDay, currentMonth, currentYear])
 
-  const { events, isLoading: eventsLoading, mutate: refreshEvents } = useCalendarEventsSWR({
+  const { events, isLoading: eventsLoading, error: eventsError, mutate: refreshEvents } = useCalendarEventsSWR({
     timeMin,
     timeMax,
   })
@@ -353,6 +353,25 @@ export default function Calendar() {
           onRefresh={() => refreshEvents()}
           isLoading={eventsLoading}
         />
+
+        {/* Error Banner */}
+        {eventsError && (
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl flex items-start gap-3 animate-slide-up">
+            <svg className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-red-900 dark:text-red-200">Failed to load calendar events</p>
+              <p className="text-sm text-red-700 dark:text-red-300 mt-0.5">{eventsError}</p>
+            </div>
+            <button
+              onClick={() => refreshEvents()}
+              className="px-3 py-1.5 text-sm font-semibold bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 rounded-lg transition-colors shrink-0"
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         <div className={`grid grid-cols-1 ${isPanelCollapsed ? 'lg:grid-cols-[1fr,auto]' : 'lg:grid-cols-3'} gap-6 transition-all duration-300`}>
           {/* Calendar View */}
