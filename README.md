@@ -22,7 +22,7 @@ AI-powered calendar management and scheduling assistant that lets you manage you
 
 ## Tech Stack
 
-- **Framework**: Next.js 15 with App Router, React 19, TypeScript
+- **Framework**: Next.js 16 with App Router, React 18, TypeScript
 - **Styling**: Tailwind CSS
 - **AI**: Anthropic Claude API with tool use
 - **Calendar**: Google Calendar API
@@ -46,10 +46,28 @@ AI-powered calendar management and scheduling assistant that lets you manage you
    GOOGLE_CLIENT_SECRET=your-client-secret
 
    # Anthropic API key for Claude
+   # Get this from: https://console.anthropic.com/
    ANTHROPIC_API_KEY=sk-ant-...
 
-   # App URL (no trailing slash)
+   # NextAuth Configuration
+   NEXTAUTH_URL=http://localhost:3000
+   NEXTAUTH_SECRET=your-nextauth-secret-here
+
+   # Session Encryption (REQUIRED)
+   # Generate with: openssl rand -hex 32
+   ENCRYPTION_KEY=your-64-character-hex-key-here
+
+   # Application URL
    NEXT_PUBLIC_APP_URL=http://localhost:3000
+   ```
+
+   **Generate secure secrets**:
+   ```bash
+   # Generate NEXTAUTH_SECRET
+   openssl rand -base64 32
+
+   # Generate ENCRYPTION_KEY (must be exactly 64 hex characters)
+   openssl rand -hex 32
    ```
 
 3. **Configure Google OAuth**:
@@ -99,4 +117,4 @@ AI-powered calendar management and scheduling assistant that lets you manage you
 - **Tool-based AI**: Claude uses structured tools (not just prompts) to interact with Google Calendar, ensuring reliable and predictable actions
 - **Timezone-aware**: All operations respect the user's local timezone
 - **Optimistic UI**: Calendar updates instantly with SWR revalidation
-- **Secure sessions**: HTTP-only cookies with encrypted tokens, automatic refresh handling
+- **Secure sessions**: HTTP-only cookies with AES-256-GCM encrypted OAuth tokens, automatic token refresh
