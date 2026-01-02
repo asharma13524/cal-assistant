@@ -110,13 +110,15 @@ export function ChatWidget() {
                 ))
               }
             } else if (data.type === 'status') {
-              // Add a status message
-              const statusMessage: Message = {
-                id: Date.now().toString() + Math.random(),
-                role: 'status',
-                content: data.message
+              // Only show status messages before text starts streaming
+              if (!hasReceivedText) {
+                const statusMessage: Message = {
+                  id: Date.now().toString() + Math.random(),
+                  role: 'status',
+                  content: data.message
+                }
+                setMessages(prev => [...prev, statusMessage])
               }
-              setMessages(prev => [...prev, statusMessage])
             } else if (data.type === 'done') {
               // Trigger cache revalidation if events were modified
               if (data.metadata?.modifiedEvents) {
