@@ -63,33 +63,33 @@ export function DayView({ selectedDay, events, onEventClick }: DayViewProps) {
   const month = selectedDay.toLocaleDateString('en-US', { month: 'short' })
 
   return (
-    <div className="bg-white dark:bg-zinc-800/50 rounded-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm">
+    <div className="bg-white dark:bg-stone-800/50 rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden shadow-sm">
       {/* Scrollable container */}
       <div
         ref={containerRef}
         className="overflow-y-auto max-h-[calc(100vh-200px)]"
       >
         {/* Day header - inside scroll container */}
-        <div className="sticky top-0 z-20 bg-white dark:bg-zinc-800/95 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="sticky top-0 z-20 bg-white dark:bg-stone-800/95 border-b border-stone-200 dark:border-stone-800">
           <div className="flex">
             {/* Time column spacer */}
-            <div className="w-16 flex-shrink-0 border-r border-zinc-200 dark:border-zinc-800" />
+            <div className="w-16 flex-shrink-0 border-r border-stone-200 dark:border-stone-800" />
 
             {/* Day header */}
             <div className="flex-1 p-4 text-center">
-              <div className="text-sm font-medium text-zinc-500 dark:text-zinc-500">{dayName}</div>
+              <div className="text-sm font-medium text-stone-500 dark:text-stone-500">{dayName}</div>
               <div className="flex items-center justify-center gap-2 mt-1">
                 <div
                   className={`text-2xl font-semibold ${
                     dayIsToday
-                      ? 'w-10 h-10 flex items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500 text-white'
-                      : 'text-zinc-700 dark:text-zinc-300'
+                      ? 'w-10 h-10 flex items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-600 dark:from-primary-400 dark:to-primary-500 text-white'
+                      : 'text-stone-700 dark:text-stone-300'
                   }`}
                 >
                   {selectedDay.getDate()}
                 </div>
                 {!dayIsToday && (
-                  <div className="text-lg font-medium text-zinc-500 dark:text-zinc-500">{month}</div>
+                  <div className="text-lg font-medium text-stone-500 dark:text-stone-500">{month}</div>
                 )}
               </div>
             </div>
@@ -103,7 +103,7 @@ export function DayView({ selectedDay, events, onEventClick }: DayViewProps) {
           {/* Content layer */}
           <div className="relative flex h-full">
             {/* Time labels */}
-            <div className="w-16 flex-shrink-0 relative border-r border-zinc-200 dark:border-zinc-800">
+            <div className="w-16 flex-shrink-0 relative border-r border-stone-200 dark:border-stone-800">
               {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => {
                 const hour = START_HOUR + i
                 const period = hour >= 12 ? 'PM' : 'AM'
@@ -119,7 +119,7 @@ export function DayView({ selectedDay, events, onEventClick }: DayViewProps) {
                       height: `${HOUR_HEIGHT}px`
                     }}
                   >
-                    <span className="text-xs text-zinc-500 dark:text-zinc-500 absolute right-2 -top-2.5">
+                    <span className="text-xs text-stone-500 dark:text-stone-500 absolute right-2 -top-2.5">
                       {time}
                     </span>
                   </div>
@@ -134,7 +134,7 @@ export function DayView({ selectedDay, events, onEventClick }: DayViewProps) {
                 {Array.from({ length: END_HOUR - START_HOUR }).map((_, i) => (
                   <div
                     key={i}
-                    className="absolute w-full h-px bg-zinc-200 dark:bg-zinc-700/50"
+                    className="absolute w-full h-px bg-stone-200 dark:bg-stone-700/50"
                     style={{ top: `${(i + 1) * HOUR_HEIGHT}px` }}
                   />
                 ))}
@@ -165,22 +165,22 @@ export function DayView({ selectedDay, events, onEventClick }: DayViewProps) {
               {dayIsToday && (
                 <CurrentTimeIndicator startHour={START_HOUR} hourHeight={HOUR_HEIGHT} leftOffset={0} />
               )}
-            </div>
-          </div>
-        </div>
-        </div>
 
-        {/* Empty state */}
-        {dayEvents.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="text-center text-zinc-400 dark:text-zinc-600 mt-20">
-              <svg className="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <p className="text-sm">No events today</p>
+              {/* Empty state */}
+              {dayEvents.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="text-center text-stone-400 dark:text-stone-600 mt-20">
+                    <svg className="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p className="text-sm">No events today</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        )}
+        </div>
+        </div>
       </div>
     </div>
   )

@@ -210,7 +210,7 @@ export function ChatWidget() {
       {/* Chat Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-6 right-6 z-50 flex items-center justify-center w-14 h-14 rounded-full shadow-xl transition-all duration-300 ${
+        className={`fixed bottom-6 right-3 sm:right-6 z-50 flex items-center justify-center w-14 h-14 rounded-full shadow-xl transition-all duration-300 ${
           isOpen
             ? 'bg-stone-700 dark:bg-stone-800 hover:bg-stone-600 dark:hover:bg-stone-700 rotate-0 scale-100'
             : 'bg-gradient-to-br from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 shadow-primary-500/30 scale-100 hover:scale-105'
@@ -230,7 +230,7 @@ export function ChatWidget() {
 
       {/* Chat Panel */}
       <div
-        className={`fixed bottom-24 right-6 z-40 w-[440px] max-w-[calc(100vw-3rem)] bg-white dark:bg-stone-950 rounded-3xl shadow-2xl border border-stone-200/50 dark:border-stone-800/50 backdrop-blur-xl overflow-hidden transition-all duration-300 ${
+        className={`fixed bottom-24 right-3 sm:right-6 z-40 w-[calc(100vw-1.5rem)] sm:w-[440px] sm:max-w-[calc(100vw-3rem)] bg-white dark:bg-stone-950 rounded-3xl shadow-2xl border border-stone-200/50 dark:border-stone-800/50 backdrop-blur-xl overflow-hidden transition-all duration-300 ${
           isOpen
             ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto'
             : 'opacity-0 translate-y-4 scale-95 pointer-events-none'
