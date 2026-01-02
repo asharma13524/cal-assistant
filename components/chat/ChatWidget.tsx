@@ -244,7 +244,7 @@ export function ChatWidget() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100 tracking-tight">Calendar Assistant</h3>
-              <p className="text-xs text-stone-500 dark:text-stone-400"></p>
+              <p className="text-xs text-stone-500 dark:text-stone-400">Powered by Claude</p>
             </div>
           </div>
         </div>

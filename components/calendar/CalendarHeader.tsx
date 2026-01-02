@@ -32,7 +32,6 @@ export function CalendarHeader({
         <h1 className="text-2xl font-bold tracking-tight">{currentPeriod}</h1>
 
         <div className="flex items-center gap-2">
-          {/* View Mode Switcher */}
           <div className="inline-flex bg-stone-100 dark:bg-stone-900 rounded-xl p-1 border border-stone-200/50 dark:border-stone-800/50">
             {views.map((view) => (
               <button
@@ -49,7 +48,6 @@ export function CalendarHeader({
             ))}
           </div>
 
-          {/* Today Button */}
           <button
             onClick={onToday}
             className="px-3.5 py-1.5 text-sm font-semibold bg-primary-50 hover:bg-primary-100 dark:bg-primary-900/30 dark:hover:bg-primary-900/50 text-primary-700 dark:text-primary-400 rounded-xl transition-all"
@@ -57,7 +55,6 @@ export function CalendarHeader({
             Today
           </button>
 
-          {/* Refresh Button */}
           <button
             onClick={onRefresh}
             disabled={isLoading}
@@ -81,7 +78,6 @@ export function CalendarHeader({
         </div>
       </div>
 
-      {/* Navigation Arrows */}
       <div className="flex items-center gap-2">
         <button
           onClick={() => onNavigate('prev')}

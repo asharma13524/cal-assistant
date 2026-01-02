@@ -1,9 +1,13 @@
 import { cookies } from 'next/headers'
+import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
 import { refreshAccessToken } from '@/lib/google/oauth'
 import { TOKEN_EXPIRY_BUFFER_MS, COOKIE_MAX_AGE_SECONDS } from '@/lib/constants'
 
 const SESSION_COOKIE = 'session'
 const TOKEN_COOKIE = 'google_tokens'
+const ALGORITHM = 'aes-256-gcm'
+const IV_LENGTH = 16
+const AUTH_TAG_LENGTH = 16
 
 export interface Session {
   user: {
@@ -20,14 +24,56 @@ export interface StoredTokens {
   expiry_date?: number
 }
 
-// Encrypt/decrypt helpers (simple base64 for demo - use proper encryption in production)
+function getEncryptionKey(): Buffer {
+  const key = process.env.ENCRYPTION_KEY
+  if (!key) {
+    throw new Error(
+      'ENCRYPTION_KEY environment variable is required. Generate one with: openssl rand -hex 32'
+    )
+  }
+  if (key.length !== 64) {
+    throw new Error(
+      'ENCRYPTION_KEY must be 64 characters (32 bytes in hex). Generate with: openssl rand -hex 32'
+    )
+  }
+  return Buffer.from(key, 'hex')
+}
+
 function encode(data: object): string {
-  return Buffer.from(JSON.stringify(data)).toString('base64')
+  const key = getEncryptionKey()
+  const iv = randomBytes(IV_LENGTH)
+  const cipher = createCipheriv(ALGORITHM, key, iv)
+
+  const plaintext = JSON.stringify(data)
+  let encrypted = cipher.update(plaintext, 'utf8', 'hex')
+  encrypted += cipher.final('hex')
+
+  const authTag = cipher.getAuthTag()
+
+  // Format: iv:authTag:encrypted
+  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`
 }
 
 function decode<T>(encoded: string): T | null {
   try {
-    return JSON.parse(Buffer.from(encoded, 'base64').toString('utf-8'))
+    const key = getEncryptionKey()
+    const parts = encoded.split(':')
+
+    if (parts.length !== 3) {
+      return null
+    }
+
+    const [ivHex, authTagHex, encrypted] = parts
+    const iv = Buffer.from(ivHex, 'hex')
+    const authTag = Buffer.from(authTagHex, 'hex')
+
+    const decipher = createDecipheriv(ALGORITHM, key, iv)
+    decipher.setAuthTag(authTag)
+
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8')
+    decrypted += decipher.final('utf8')
+
+    return JSON.parse(decrypted)
   } catch {
     return null
   }

@@ -158,7 +158,7 @@ export async function updateCalendarEvent(
   const auth = getAuthenticatedClient(accessToken)
   const calendar = google.calendar({ version: 'v3', auth })
 
-  const updateBody: any = {}
+  const updateBody: Record<string, unknown> = {}
   if (eventData.summary !== undefined) updateBody.summary = eventData.summary
   if (eventData.description !== undefined) updateBody.description = eventData.description
   if (eventData.start !== undefined) updateBody.start = eventData.start

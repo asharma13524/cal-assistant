@@ -74,7 +74,6 @@ export default function Calendar() {
     timeMax,
   })
 
-  // Group events by day for selected day panel
   const eventsByDay = useMemo(() => {
     const grouped: Record<number, CalendarEvent[]> = {}
 
@@ -101,7 +100,6 @@ export default function Calendar() {
       }
     }
 
-    // Sort events by start time within each day
     for (const day in grouped) {
       grouped[day].sort((a, b) => {
         const aTime = a.start.dateTime || a.start.date || ''
@@ -119,7 +117,6 @@ export default function Calendar() {
     }
   }, [isAuthenticated, authLoading, router])
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       // Ignore if typing in input field

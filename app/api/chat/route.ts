@@ -424,7 +424,7 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder()
-        const send = (data: any) => {
+        const send = (data: Record<string, unknown>) => {
           controller.enqueue(encoder.encode(JSON.stringify(data) + '\n'))
         }
 
