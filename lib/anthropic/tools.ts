@@ -24,11 +24,11 @@ export const calendarTools: Tool[] = [
       properties: {
         start_date: {
           type: 'string',
-          description: 'Start date in ISO format (e.g., 2024-01-15). Defaults to today if not provided.',
+          description: 'Start date in ISO format (e.g., 2026-01-15). Defaults to today if not provided.',
         },
         end_date: {
           type: 'string',
-          description: 'End date in ISO format (e.g., 2024-01-22). Defaults to 7 days from start if not provided.',
+          description: 'End date in ISO format (e.g., 2026-01-22). Defaults to 7 days from start if not provided.',
         },
       },
       required: [],
@@ -42,11 +42,11 @@ export const calendarTools: Tool[] = [
       properties: {
         start_time: {
           type: 'string',
-          description: 'Start time to check in ISO format (e.g., 2024-01-15T10:00:00)',
+          description: 'Start time to check in ISO format (e.g., 2026-01-15T10:00:00)',
         },
         end_time: {
           type: 'string',
-          description: 'End time to check in ISO format (e.g., 2024-01-15T11:00:00)',
+          description: 'End time to check in ISO format (e.g., 2026-01-15T11:00:00)',
         },
       },
       required: ['start_time', 'end_time'],
@@ -73,11 +73,11 @@ export const calendarTools: Tool[] = [
         },
         start_time: {
           type: 'string',
-          description: 'Start time in ISO format (e.g., 2024-01-15T10:00:00)',
+          description: 'Start time in ISO format (e.g., 2026-01-15T10:00:00)',
         },
         end_time: {
           type: 'string',
-          description: 'End time in ISO format (e.g., 2024-01-15T11:00:00)',
+          description: 'End time in ISO format (e.g., 2026-01-15T11:00:00)',
         },
         description: {
           type: 'string',
