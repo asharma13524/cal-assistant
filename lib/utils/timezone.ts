@@ -1,4 +1,4 @@
-import { format, parse } from 'date-fns'
+import { format, parse, addDays as addDaysFns } from 'date-fns'
 import { fromZonedTime, toZonedTime } from 'date-fns-tz'
 import { USER_TIMEZONE } from '@/lib/constants'
 
@@ -54,5 +54,38 @@ export function isTimeInPast(isoDateStr: string): boolean {
   const eventTime = parseInUserTimezone(isoDateStr)
   const now = new Date()
   return eventTime < now
+}
+
+/**
+ * Add days to a date in a timezone-aware manner.
+ * Ensures date arithmetic happens in the user's timezone, not the server's.
+ *
+ * Example: addDaysInUserTimezone(new Date(), 1) // Tomorrow in user's timezone
+ */
+export function addDaysInUserTimezone(date: Date, days: number): Date {
+  // Convert to user's timezone
+  const zonedDate = toZonedTime(date, USER_TIMEZONE)
+  // Add days using date-fns
+  const newZonedDate = addDaysFns(zonedDate, days)
+  // Convert back to UTC Date
+  return fromZonedTime(newZonedDate, USER_TIMEZONE)
+}
+
+/**
+ * Get the start of day (00:00:00) for a date in the user's timezone.
+ */
+export function startOfDayInUserTimezone(date: Date): Date {
+  const zonedDate = toZonedTime(date, USER_TIMEZONE)
+  const dateStr = format(zonedDate, 'yyyy-MM-dd')
+  return parseInUserTimezone(`${dateStr}T00:00:00`)
+}
+
+/**
+ * Get the end of day (23:59:59) for a date in the user's timezone.
+ */
+export function endOfDayInUserTimezone(date: Date): Date {
+  const zonedDate = toZonedTime(date, USER_TIMEZONE)
+  const dateStr = format(zonedDate, 'yyyy-MM-dd')
+  return parseInUserTimezone(`${dateStr}T23:59:59`)
 }
 

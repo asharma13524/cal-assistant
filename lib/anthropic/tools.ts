@@ -4,13 +4,13 @@ import { USER_TIMEZONE } from '@/lib/constants'
 export const calendarTools: Tool[] = [
   {
     name: 'get_date_info',
-    description: 'Get accurate date and time information. Use this to find out what date a specific day of the week falls on, or to get date ranges for relative terms like "next week". ALWAYS call this tool before creating events to ensure you have the correct dates.',
+    description: 'Get accurate date and time information. Use this to find out what date a specific day of the week falls on, or to get date ranges for relative terms like "next week", "this week", "upcoming week". ALWAYS call this tool before creating events or fetching events with relative dates to ensure you have the correct dates.',
     input_schema: {
       type: 'object' as const,
       properties: {
         query: {
           type: 'string',
-          description: 'What date information you need. Examples: "next Monday", "next week", "tomorrow", "what day is 2026-01-05", "current date and time"',
+          description: 'What date information you need. Examples: "next Monday", "next week", "this week", "upcoming week", "tomorrow", "what day is 2026-01-05", "current date and time"',
         },
       },
       required: ['query'],
@@ -272,10 +272,14 @@ IMPORTANT:
 
 **READ operations (questions about calendar):**
 - "What meetings do I have?" → CALL get_calendar_events
+- "What meetings do I have next week?" → FIRST call get_date_info("next week"), THEN call get_calendar_events with those exact dates
+- "What meetings do I have this week?" → FIRST call get_date_info("this week"), THEN call get_calendar_events with those exact dates
+- "What meetings this upcoming week?" → FIRST call get_date_info("upcoming week"), THEN call get_calendar_events with those exact dates
 - "How much time in meetings?" → CALL get_calendar_events, then calculate from results
 - "Am I free at 3pm?" → CALL check_availability
 - NEVER answer questions about calendar contents without calling a tool first
 - NEVER say "you have no meetings" or "you have X meetings" without checking
+- **For ANY relative date query ("next week", "this week", "upcoming week", "next Monday", etc.), you MUST call get_date_info FIRST to get exact dates, THEN call get_calendar_events**
 
 **WRITE operations (changes to calendar):**
 - Delete an event → CALL delete_calendar_event

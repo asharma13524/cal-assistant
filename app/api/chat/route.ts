@@ -9,10 +9,14 @@ import {
   isTimeInPast,
   formatTimeInUserTimezone,
   formatDateInUserTimezone,
-  formatDateTimeInUserTimezone
+  formatDateTimeInUserTimezone,
+  addDaysInUserTimezone,
+  startOfDayInUserTimezone,
+  endOfDayInUserTimezone
 } from '@/lib/utils/timezone'
 import type { UpdateEventData } from '@/lib/types/calendar'
 import type { MessageParam, ContentBlock, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages'
+import * as chrono from 'chrono-node'
 
 interface ChatRequest {
   message: string
@@ -41,89 +45,91 @@ function getToolStatusMessage(toolName: string): string {
 }
 
 function getDateInfo(query: string): string {
-  const now = new Date()
   const queryLower = query.toLowerCase()
+  const now = new Date()
 
-  // Helper to get day of week name
+  // Helper functions
   const getDayName = (date: Date): string => {
     return date.toLocaleDateString('en-US', { weekday: 'long', timeZone: USER_TIMEZONE })
   }
 
-  // Helper to format date
   const formatDate = (date: Date): string => {
     return date.toLocaleDateString('en-CA', { timeZone: USER_TIMEZONE }) // YYYY-MM-DD
   }
 
-  // Current date and time
-  if (queryLower.includes('current') || queryLower.includes('now') || queryLower.includes('today')) {
-    const dayName = getDayName(now)
-    const dateStr = formatDate(now)
-    const timeStr = now.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZone: USER_TIMEZONE
-    })
-    return `Current date: ${dayName}, ${dateStr} at ${timeStr} (${USER_TIMEZONE})`
+  const getDayOfWeek = (date: Date): number => {
+    const dayStr = date.toLocaleDateString('en-US', { weekday: 'short', timeZone: USER_TIMEZONE })
+    const dayMap: Record<string, number> = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 }
+    return dayMap[dayStr] || 0
   }
 
-  // Tomorrow
-  if (queryLower.includes('tomorrow')) {
-    const tomorrow = new Date(now)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    return `Tomorrow is ${getDayName(tomorrow)}, ${formatDate(tomorrow)}`
-  }
-
-  // Next week - calculate Monday through Friday of next week
-  if (queryLower.includes('next week')) {
-    const currentDay = now.getDay() // 0 = Sunday, 1 = Monday, etc.
-    const daysUntilNextMonday = currentDay === 0 ? 1 : 8 - currentDay
-
-    const nextMonday = new Date(now)
-    nextMonday.setDate(now.getDate() + daysUntilNextMonday)
-
+  const formatBusinessWeek = (startMonday: Date): string => {
     const dates = []
     const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-
     for (let i = 0; i < 5; i++) {
-      const date = new Date(nextMonday)
-      date.setDate(nextMonday.getDate() + i)
+      const date = addDaysInUserTimezone(startMonday, i)
       dates.push(`${dayNames[i]} = ${formatDate(date)}`)
     }
-
-    return `Next week (business days):\n${dates.join('\n')}`
+    return dates.join('\n')
   }
 
-  // Next [specific day]
-  const dayMatch = queryLower.match(/next (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/)
-  if (dayMatch) {
-    const targetDayName = dayMatch[1]
-    const dayMap: Record<string, number> = {
-      'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
-      'thursday': 4, 'friday': 5, 'saturday': 6
+  // Special handling for "this week" / "upcoming week" / "coming week"
+  if (queryLower.match(/\b(this|upcoming|coming)\s+week\b/)) {
+    const currentDay = getDayOfWeek(now)
+    let monday: Date
+
+    if (currentDay === 0) {
+      monday = addDaysInUserTimezone(now, 1)
+    } else if (currentDay === 6) {
+      monday = addDaysInUserTimezone(now, 2)
+    } else {
+      const daysSinceMonday = currentDay - 1
+      monday = addDaysInUserTimezone(now, -daysSinceMonday)
     }
 
-    const targetDay = dayMap[targetDayName]
-    const currentDay = now.getDay()
+    const friday = addDaysInUserTimezone(monday, 4)
 
-    let daysUntilTarget = targetDay - currentDay
-    if (daysUntilTarget <= 0) {
-      daysUntilTarget += 7
+    return `This week (business days):
+${formatBusinessWeek(monday)}
+
+⚠️ TO GET CALENDAR EVENTS FOR THIS WEEK, USE THESE EXACT DATES:
+start_date: "${formatDate(monday)}"
+end_date: "${formatDate(friday)}"`
+  }
+
+  // Special handling for "next week"
+  if (queryLower.match(/\bnext\s+week\b/)) {
+    const currentDay = getDayOfWeek(now)
+    const daysUntilNextMonday = currentDay === 0 ? 1 : 8 - currentDay
+    const nextMonday = addDaysInUserTimezone(now, daysUntilNextMonday)
+    const nextFriday = addDaysInUserTimezone(nextMonday, 4)
+
+    return `Next week (business days):
+${formatBusinessWeek(nextMonday)}
+
+⚠️ TO GET CALENDAR EVENTS FOR NEXT WEEK, USE THESE EXACT DATES:
+start_date: "${formatDate(nextMonday)}"
+end_date: "${formatDate(nextFriday)}"`
+  }
+
+  // For everything else, use chrono for natural language parsing
+  const parsed = chrono.parse(query, now)
+
+  if (parsed.length > 0) {
+    const result = parsed[0]
+    const startDate = result.start.date()
+
+    // Check if it's a range
+    if (result.end) {
+      const endDate = result.end.date()
+      return `Date range: ${formatDate(startDate)} to ${formatDate(endDate)}`
     }
 
-    const nextDate = new Date(now)
-    nextDate.setDate(now.getDate() + daysUntilTarget)
-
-    return `Next ${targetDayName.charAt(0).toUpperCase() + targetDayName.slice(1)} is ${formatDate(nextDate)}`
+    // Single date
+    return `${getDayName(startDate)}, ${formatDate(startDate)}`
   }
 
-  // What day is [specific date]
-  const dateMatch = queryLower.match(/(\d{4}-\d{2}-\d{2})/)
-  if (dateMatch) {
-    const dateStr = dateMatch[1]
-    const date = new Date(dateStr + 'T12:00:00') // Use noon to avoid timezone issues
-    return `${dateStr} is a ${getDayName(date)}`
-  }
-
+  // Fallback to current date
   return `Current date: ${getDayName(now)}, ${formatDate(now)}`
 }
 
@@ -144,33 +150,44 @@ async function executeToolCall(
       }
 
       case 'get_calendar_events': {
+        // VALIDATION: Reject relative date terms - force use of get_date_info first
+        const startDateStr = (toolInput.start_date as string)?.toLowerCase() || ''
+        const endDateStr = (toolInput.end_date as string)?.toLowerCase() || ''
+        const relativeDatePattern = /\b(next|this|last|upcoming|coming|week|monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|yesterday)\b/
+
+        if (relativeDatePattern.test(startDateStr) || relativeDatePattern.test(endDateStr)) {
+          return {
+            content: '❌ ERROR: Cannot use relative date terms like "next week", "this week", "Monday", etc. in get_calendar_events.\n\n✅ REQUIRED: First call get_date_info tool with your relative date query (e.g., "next week", "this Monday") to get exact ISO dates, THEN call get_calendar_events with those exact dates.',
+            modifiedEvents: false,
+          }
+        }
+
         // Parse dates with proper handling for date-only strings
         let startDate: Date
         let endDate: Date
 
         if (toolInput.start_date) {
           const dateStr = toolInput.start_date as string
-          // If it's just a date (no time), set to start of day in local time
+          // If it's just a date (no time), set to start of day in user's timezone
           if (dateStr.length <= 10) {
-            startDate = new Date(dateStr + 'T00:00:00')
+            startDate = parseInUserTimezone(dateStr + 'T00:00:00')
           } else {
-            startDate = new Date(dateStr)
+            startDate = parseInUserTimezone(dateStr)
           }
         } else {
-          startDate = new Date()
-          startDate.setHours(0, 0, 0, 0)
+          startDate = startOfDayInUserTimezone(new Date())
         }
 
         if (toolInput.end_date) {
           const dateStr = toolInput.end_date as string
-          // If it's just a date (no time), set to end of day in local time
+          // If it's just a date (no time), set to end of day in user's timezone
           if (dateStr.length <= 10) {
-            endDate = new Date(dateStr + 'T23:59:59')
+            endDate = parseInUserTimezone(dateStr + 'T23:59:59')
           } else {
-            endDate = new Date(dateStr)
+            endDate = parseInUserTimezone(dateStr)
           }
         } else {
-          endDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+          endDate = addDaysInUserTimezone(new Date(), 7)
         }
 
         const events = await getCalendarEvents(accessToken, startDate, endDate)
@@ -189,25 +206,33 @@ async function executeToolCall(
           }
           const start = new Date(e.start.dateTime)
           const end = new Date(e.end.dateTime)
+          // Format date all at once instead of 4 separate calls
+          const fullDate = start.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+            timeZone: USER_TIMEZONE
+          })
           const attendeeList = e.attendees?.map((a) => a.displayName || a.email).join(', ')
-          return `- ${e.summary} on ${formatDateInUserTimezone(start)} from ${formatTimeInUserTimezone(start)} to ${formatTimeInUserTimezone(end)}${attendeeList ? ` with ${attendeeList}` : ''} [ID: ${e.id}]`
+          return `- ${e.summary} on ${fullDate} from ${formatTimeInUserTimezone(start)} to ${formatTimeInUserTimezone(end)}${attendeeList ? ` with ${attendeeList}` : ''} [ID: ${e.id}]`
         })
 
+        const responseContent = `Found ${events.length} events:\n${eventSummaries.join('\n')}\n\n⚠️ CRITICAL: When presenting these events to the user, use the EXACT day of week and dates shown above. DO NOT recalculate or reformat them.\n\nNote: Use the event ID to update, delete, or manage attendees.`
+
         return {
-          content: `Found ${events.length} events:\n${eventSummaries.join('\n')}\n\nNote: Use the event ID to update, delete, or manage attendees.`,
+          content: responseContent,
           modifiedEvents: false,
         }
       }
 
       case 'check_availability': {
-        const startTime = new Date(toolInput.start_time as string)
-        const endTime = new Date(toolInput.end_time as string)
+        const startTime = parseInUserTimezone(toolInput.start_time as string)
+        const endTime = parseInUserTimezone(toolInput.end_time as string)
 
         // Get events that might overlap with the requested time
-        const dayStart = new Date(startTime)
-        dayStart.setHours(0, 0, 0, 0)
-        const dayEnd = new Date(startTime)
-        dayEnd.setHours(23, 59, 59, 999)
+        const dayStart = startOfDayInUserTimezone(startTime)
+        const dayEnd = endOfDayInUserTimezone(startTime)
 
         const events = await getCalendarEvents(accessToken, dayStart, dayEnd)
 
@@ -265,8 +290,7 @@ async function executeToolCall(
 
         if (isTimeInPast(startTimeStr)) {
           const startTime = parseInUserTimezone(startTimeStr)
-          const tomorrow = new Date(startTime)
-          tomorrow.setDate(tomorrow.getDate() + 1)
+          const tomorrow = addDaysInUserTimezone(startTime, 1)
           return {
             content: `⚠️ Cannot create event in the past. The requested time (${formatDateTimeInUserTimezone(startTime)}) has already passed. Would you like to schedule for ${formatDateInUserTimezone(tomorrow)} at ${formatTimeInUserTimezone(startTime)} instead?`,
             modifiedEvents: false,
