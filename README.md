@@ -8,7 +8,7 @@ AI-powered calendar management and scheduling assistant that lets you manage you
 
 ## 📹 Demo Video
 
-[YouTube link - coming soon]
+[[YouTube link](https://www.youtube.com/watch?v=vtiEZ8thAyA)]
 
 ## ✨ Features
 
