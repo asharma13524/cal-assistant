@@ -117,3 +117,4 @@ Example prompts:
 - **Multi-calendar** - Work + personal calendars in one view
 - **Smart scheduling** - "Find time with John next week" → suggests optimal slots from both calendars
 - **Meeting prep** - Auto-summarize attendees and past context before each meeting
+- **Security hardening** - Prompt injection defenses, rate limiting, audit logging
