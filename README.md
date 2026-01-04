@@ -110,3 +110,10 @@ Example prompts:
 - "Schedule coffee with John tomorrow at 3pm"
 - "Draft an email about blocking my mornings for deep work"
 - "How much time am I spending in meetings?"
+
+## 🚀 Next Steps
+
+- **Database** - Add Postgres for conversation history, user preferences, and calendar caching
+- **Multi-calendar** - Work + personal calendars in one view
+- **Smart scheduling** - "Find time with John next week" → suggests optimal slots from both calendars
+- **Meeting prep** - Auto-summarize attendees and past context before each meeting
