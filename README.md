@@ -2,32 +2,32 @@
 
 AI-powered calendar management and scheduling assistant that lets you manage your Google Calendar through natural conversation.
 
-## Live Demo
+## 🔗 Live Demo
 
-🔗 **[cal-assistant.vercel.app](https://cal-assistant.vercel.app)**
+**[cal-assistant.vercel.app](https://cal-assistant.vercel.app)**
 
-## Features
+## 📹 Demo Video
 
-- 🔐 **Google OAuth** - Secure authentication with Google Calendar access
-- 📅 **Multiple Calendar Views** - Day, Week, Month, and Year views with smooth navigation
-- 🤖 **AI Chat Assistant** - Natural language interface powered by Claude
-  - View and search events ("What meetings do I have tomorrow?")
-  - Create events ("Schedule a meeting with Joe at 3pm")
-  - Update and delete events ("Cancel my 2pm meeting")
-  - Manage attendees ("Add sarah@email.com to the team sync")
-  - Draft scheduling emails ("Write an email to the team about blocking my mornings")
-  - Analyze calendar usage ("How much time am I spending in meetings?")
-- ⚡ **Smart Conflict Detection** - Warns before double-booking
-- 🌓 **Light/Dark Mode** - System-aware theme toggle
+[YouTube link - coming soon]
 
-## Tech Stack
+## ✨ Features
 
-- **Framework**: Next.js 16 with App Router, React 18, TypeScript
-- **Styling**: Tailwind CSS
-- **AI**: Anthropic Claude API with tool use
-- **Calendar**: Google Calendar API
-- **Data Fetching**: SWR for real-time updates
-- **Deployment**: Vercel
+- Natural language calendar operations ("Schedule coffee with John tomorrow at 3pm")
+- Real-time streaming AI responses
+- Automatic conflict detection
+- Email draft generation
+- Calendar analytics and insights
+- Multi-layered validation to prevent LLM hallucinations
+
+## 🛠️ Tech Stack
+
+Next.js 16, React 18, TypeScript, Claude Sonnet 4, Google Calendar API, SWR, Tailwind CSS
+
+## 🏗️ Architecture
+
+See `/diagram` route for interactive visualization.
+
+**Key innovation**: Multi-layered validation system prevents date hallucinations through MCP-like context injection, mandatory date verification, and post-execution validation with automatic retry.
 
 ## Getting Started
 
@@ -103,18 +103,10 @@ AI-powered calendar management and scheduling assistant that lets you manage you
 └── providers/             # Context providers
 ```
 
-## Auth Flow
+## 🧪 Try It Out
 
-1. User clicks "Continue with Google" on the sign-in page
-2. Redirected to `/api/auth/google` which initiates OAuth
-3. Google consent screen shown
-4. Callback to `/api/auth/google/callback` exchanges code for tokens
-5. Session stored in HTTP-only cookies
-6. User redirected to `/calendar`
-
-## Architecture Highlights
-
-- **Tool-based AI**: Claude uses structured tools (not just prompts) to interact with Google Calendar, ensuring reliable and predictable actions
-- **Timezone-aware**: All operations respect the user's local timezone
-- **Optimistic UI**: Calendar updates instantly with SWR revalidation
-- **Secure sessions**: HTTP-only cookies with AES-256-GCM encrypted OAuth tokens, automatic token refresh
+Example prompts:
+- "What meetings do I have this week?"
+- "Schedule coffee with John tomorrow at 3pm"
+- "Draft an email about blocking my mornings for deep work"
+- "How much time am I spending in meetings?"
