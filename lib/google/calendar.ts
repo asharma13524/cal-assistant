@@ -1,7 +1,34 @@
 import { google } from 'googleapis'
 import { getAuthenticatedClient } from './oauth'
-import { DEFAULT_EVENT_RANGE_DAYS, DEFAULT_MAX_RESULTS, STATS_MAX_RESULTS } from '@/lib/constants'
+import { DEFAULT_EVENT_RANGE_DAYS, DEFAULT_MAX_RESULTS, STATS_MAX_RESULTS, TOP_ATTENDEES_COUNT } from '@/lib/constants'
 import type { CalendarEvent, CreateEventData, UpdateEventData } from '@/lib/types/calendar'
+
+/**
+ * Transform a Google Calendar API event object to our CalendarEvent type
+ */
+function transformGoogleEvent(event: any, defaultSummary = '(No title)'): CalendarEvent {
+  return {
+    id: event.id || '',
+    summary: event.summary || defaultSummary,
+    description: event.description || undefined,
+    start: {
+      dateTime: event.start?.dateTime || event.start?.date || '',
+      timeZone: event.start?.timeZone || undefined,
+    },
+    end: {
+      dateTime: event.end?.dateTime || event.end?.date || '',
+      timeZone: event.end?.timeZone || undefined,
+    },
+    attendees: event.attendees?.map((a: any) => ({
+      email: a.email || '',
+      displayName: a.displayName || undefined,
+      responseStatus: a.responseStatus as 'accepted' | 'declined' | 'tentative' | 'needsAction' | undefined,
+    })),
+    location: event.location || undefined,
+    status: event.status as CalendarEvent['status'],
+    htmlLink: event.htmlLink || undefined,
+  }
+}
 
 export async function getCalendarEvents(
   accessToken: string,
@@ -36,27 +63,7 @@ export async function getCalendarEvents(
 
   const events = response.data.items || []
 
-  return events.map((event) => ({
-    id: event.id || '',
-    summary: event.summary || '(No title)',
-    description: event.description || undefined,
-    start: {
-      dateTime: event.start?.dateTime || event.start?.date || '',
-      timeZone: event.start?.timeZone || undefined,
-    },
-    end: {
-      dateTime: event.end?.dateTime || event.end?.date || '',
-      timeZone: event.end?.timeZone || undefined,
-    },
-    attendees: event.attendees?.map((a) => ({
-      email: a.email || '',
-      displayName: a.displayName || undefined,
-      responseStatus: a.responseStatus as 'accepted' | 'declined' | 'tentative' | 'needsAction' | undefined,
-    })),
-    location: event.location || undefined,
-    status: event.status as CalendarEvent['status'],
-    htmlLink: event.htmlLink || undefined,
-  }))
+  return events.map((event) => transformGoogleEvent(event))
 }
 
 export async function createCalendarEvent(
@@ -80,27 +87,7 @@ export async function createCalendarEvent(
 
   const event = response.data
 
-  return {
-    id: event.id || '',
-    summary: event.summary || '',
-    description: event.description || undefined,
-    start: {
-      dateTime: event.start?.dateTime || event.start?.date || '',
-      timeZone: event.start?.timeZone || undefined,
-    },
-    end: {
-      dateTime: event.end?.dateTime || event.end?.date || '',
-      timeZone: event.end?.timeZone || undefined,
-    },
-    attendees: event.attendees?.map((a) => ({
-      email: a.email || '',
-      displayName: a.displayName || undefined,
-      responseStatus: a.responseStatus as 'accepted' | 'declined' | 'tentative' | 'needsAction' | undefined,
-    })),
-    location: event.location || undefined,
-    status: event.status as CalendarEvent['status'],
-    htmlLink: event.htmlLink || undefined,
-  }
+  return transformGoogleEvent(event, '')
 }
 
 export async function getCalendarStats(accessToken: string) {
@@ -145,7 +132,7 @@ export async function getCalendarStats(accessToken: string) {
     meetingsByDay,
     topAttendees: Object.entries(attendeeCounts)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
+      .slice(0, TOP_ATTENDEES_COUNT)
       .map(([email, count]) => ({ email, meetingCount: count })),
     averageMeetingsPerDay: Math.round(events.length / 7 * 10) / 10,
   }
@@ -166,34 +153,40 @@ export async function updateCalendarEvent(
   if (eventData.attendees !== undefined) updateBody.attendees = eventData.attendees
   if (eventData.location !== undefined) updateBody.location = eventData.location
 
-  const response = await calendar.events.patch({
-    calendarId: 'primary',
-    eventId: eventData.eventId,
-    requestBody: updateBody,
-  })
+  try {
+    const response = await calendar.events.patch({
+      calendarId: 'primary',
+      eventId: eventData.eventId,
+      requestBody: updateBody,
+    })
 
-  const event = response.data
+    const event = response.data
 
-  return {
-    id: event.id || '',
-    summary: event.summary || '',
-    description: event.description || undefined,
-    start: {
-      dateTime: event.start?.dateTime || event.start?.date || '',
-      timeZone: event.start?.timeZone || undefined,
-    },
-    end: {
-      dateTime: event.end?.dateTime || event.end?.date || '',
-      timeZone: event.end?.timeZone || undefined,
-    },
-    attendees: event.attendees?.map((a) => ({
-      email: a.email || '',
-      displayName: a.displayName || undefined,
-      responseStatus: a.responseStatus as 'accepted' | 'declined' | 'tentative' | 'needsAction' | undefined,
-    })),
-    location: event.location || undefined,
-    status: event.status as CalendarEvent['status'],
-    htmlLink: event.htmlLink || undefined,
+    return {
+      id: event.id || '',
+      summary: event.summary || '',
+      description: event.description || undefined,
+      start: {
+        dateTime: event.start?.dateTime || event.start?.date || '',
+        timeZone: event.start?.timeZone || undefined,
+      },
+      end: {
+        dateTime: event.end?.dateTime || event.end?.date || '',
+        timeZone: event.end?.timeZone || undefined,
+      },
+      attendees: event.attendees?.map((a) => ({
+        email: a.email || '',
+        displayName: a.displayName || undefined,
+        responseStatus: a.responseStatus as 'accepted' | 'declined' | 'tentative' | 'needsAction' | undefined,
+      })),
+      htmlLink: event.htmlLink || undefined,
+    }
+  } catch (error: unknown) {
+    // Handle 404 - event doesn't exist
+    if (error && typeof error === 'object' && 'code' in error && error.code === 404) {
+      throw new Error(`Event with ID "${eventData.eventId}" not found. It may have been deleted or the ID is incorrect. Please call get_calendar_events to get the current event ID.`)
+    }
+    throw error
   }
 }
 

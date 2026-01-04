@@ -10,7 +10,7 @@ import {
   isToday,
   groupOverlappingEvents,
   calculateEventPosition,
-  getHourHeight,
+  HOUR_HEIGHT_PX,
 } from '@/lib/utils/calendar'
 
 interface WeekViewProps {
@@ -23,7 +23,7 @@ interface WeekViewProps {
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const START_HOUR = 0  // Midnight
 const END_HOUR = 23   // 11 PM - full 24 hour day
-const HOUR_HEIGHT = getHourHeight()
+const HOUR_HEIGHT = HOUR_HEIGHT_PX
 
 export function WeekView({ weekStart, events, onEventClick, onDayClick }: WeekViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)

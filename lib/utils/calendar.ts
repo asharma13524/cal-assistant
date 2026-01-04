@@ -1,5 +1,10 @@
 import type { CalendarEvent } from '../types/calendar'
 
+// Calendar display constants
+export const HOUR_HEIGHT_PX = 60 // Height in pixels for one hour in timeline views
+export const DEFAULT_START_HOUR = 6 // 6 AM
+export const DEFAULT_END_HOUR = 22 // 10 PM
+
 // Week calculations
 export function getWeekStart(date: Date): Date {
   const d = new Date(date)
@@ -27,7 +32,7 @@ export function getWeekDays(weekStart: Date): Date[] {
 }
 
 // Time slot generation for timeline views
-export function getTimeSlots(startHour = 6, endHour = 22): string[] {
+export function getTimeSlots(startHour = DEFAULT_START_HOUR, endHour = DEFAULT_END_HOUR): string[] {
   const slots: string[] = []
   for (let hour = startHour; hour <= endHour; hour++) {
     const period = hour >= 12 ? 'PM' : 'AM'
@@ -35,10 +40,6 @@ export function getTimeSlots(startHour = 6, endHour = 22): string[] {
     slots.push(`${displayHour} ${period}`)
   }
   return slots
-}
-
-export function getHourHeight(): number {
-  return 60 // 60px per hour
 }
 
 // Event positioning for timeline views

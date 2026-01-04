@@ -1,4 +1,4 @@
-import { format, parse, addDays as addDaysFns } from 'date-fns'
+import { format, addDays as addDaysFns } from 'date-fns'
 import { fromZonedTime, toZonedTime } from 'date-fns-tz'
 import { USER_TIMEZONE } from '@/lib/constants'
 
@@ -13,14 +13,6 @@ export function parseInUserTimezone(isoDateStr: string): Date {
   // fromZonedTime interprets the date string as being in the specified timezone
   // and returns the equivalent UTC Date
   return fromZonedTime(isoDateStr, USER_TIMEZONE)
-}
-
-/**
- * Get the current time as a Date in the user's timezone context.
- * (Still a UTC Date internally, but represents "now" correctly for comparison)
- */
-export function nowInUserTimezone(): Date {
-  return new Date()
 }
 
 /**

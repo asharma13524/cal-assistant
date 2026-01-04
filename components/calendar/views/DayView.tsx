@@ -9,7 +9,7 @@ import {
   isToday,
   groupOverlappingEvents,
   calculateEventPosition,
-  getHourHeight,
+  HOUR_HEIGHT_PX,
 } from '@/lib/utils/calendar'
 
 interface DayViewProps {
@@ -20,7 +20,7 @@ interface DayViewProps {
 
 const START_HOUR = 0  // Midnight
 const END_HOUR = 23   // 11 PM - full 24 hour day
-const HOUR_HEIGHT = getHourHeight()
+const HOUR_HEIGHT = HOUR_HEIGHT_PX
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 export function DayView({ selectedDay, events, onEventClick }: DayViewProps) {

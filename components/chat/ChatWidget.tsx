@@ -110,16 +110,21 @@ export function ChatWidget() {
                 ))
               }
             } else if (data.type === 'status') {
-              // Only show status messages before text starts streaming
-              if (!hasReceivedText) {
-                const statusMessage: Message = {
-                  id: Date.now().toString() + Math.random(),
-                  role: 'status',
-                  content: data.message
-                }
-                setMessages(prev => [...prev, statusMessage])
+              // Show status messages to indicate tool execution
+              const statusMessage: Message = {
+                id: Date.now().toString() + Math.random(),
+                role: 'status',
+                content: data.message
               }
+              setMessages(prev => {
+                // Remove previous status messages and add the new one
+                const filtered = prev.filter(msg => msg.role !== 'status')
+                return [...filtered, statusMessage]
+              })
             } else if (data.type === 'done') {
+              // Remove any remaining status messages
+              setMessages(prev => prev.filter(msg => msg.role !== 'status'))
+
               // Trigger cache revalidation if events were modified
               if (data.metadata?.modifiedEvents) {
                 mutate(
@@ -284,10 +289,17 @@ export function ChatWidget() {
                     message.role === 'user'
                       ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-md shadow-primary-500/20 font-medium'
                       : message.role === 'status'
-                      ? 'bg-transparent text-stone-500 dark:text-stone-500 italic text-xs px-2 py-1 status-pulse'
+                      ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 border border-primary-200 dark:border-primary-800 italic text-xs px-3 py-2 shadow-sm flex items-center gap-2'
                       : 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 border border-stone-200/60 dark:border-stone-800/60 shadow-sm leading-relaxed'
                   }`}
                 >
+                  {message.role === 'status' && (
+                    <div className="flex gap-1">
+                      <div className="w-1.5 h-1.5 bg-primary-500 dark:bg-primary-400 rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+                      <div className="w-1.5 h-1.5 bg-primary-500 dark:bg-primary-400 rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
+                      <div className="w-1.5 h-1.5 bg-primary-500 dark:bg-primary-400 rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  )}
                   {message.content}
                 </div>
               </div>

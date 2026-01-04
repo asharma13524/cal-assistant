@@ -4,13 +4,13 @@ import { USER_TIMEZONE } from '@/lib/constants'
 export const calendarTools: Tool[] = [
   {
     name: 'get_date_info',
-    description: 'Get accurate date and time information. Use this to find out what date a specific day of the week falls on, or to get date ranges for relative terms like "next week", "this week", "upcoming week". ALWAYS call this tool before creating events or fetching events with relative dates to ensure you have the correct dates.',
+    description: 'CRITICAL: Get accurate date and day-of-week information. Your training data has INCORRECT information about what day of the week future dates fall on. You MUST use this tool to find out what date a specific day of the week falls on, or to verify what day-of-week a given date is. Use this for ANY date-related query including "next week", "this week", "next Monday", or to verify "what day is 2026-01-05". ALWAYS call this tool when working with dates - never trust your internal date calculations.',
     input_schema: {
       type: 'object' as const,
       properties: {
         query: {
           type: 'string',
-          description: 'What date information you need. Examples: "next Monday", "next week", "this week", "upcoming week", "tomorrow", "what day is 2026-01-05", "current date and time"',
+          description: 'What date information you need. Examples: "next Monday", "next week", "this week", "upcoming week", "tomorrow", "2026-01-05" (to find what day of week it is), "January 6" (to find day of week), "current date and time"',
         },
       },
       required: ['query'],
@@ -239,19 +239,32 @@ export function getSystemPrompt(): string {
 - **Timezone: ${userTimezone}**
 
 ## 🚨 CRITICAL: DATE CALCULATIONS
-**NEVER calculate dates yourself. Your internal date calculations may be incorrect.**
+**YOUR TRAINING DATA HAS INCORRECT DATE INFORMATION. NEVER calculate dates or day-of-week yourself.**
 
-⚠️ **MANDATORY: Use the get_date_info tool for ANY date-related questions:**
-- Before creating events for "next week", call get_date_info with query "next week"
-- Before creating an event for "next Monday", call get_date_info with query "next Monday"
-- If unsure what day a date is, call get_date_info with the date
-- ALWAYS call get_date_info first, then use the exact dates it returns
+⚠️ **MANDATORY RULES - VIOLATION WILL CAUSE BUGS:**
+
+1. **For ANY date mentioned by user OR returned by tools**: Use get_date_info to verify what day of week it is
+   - User says "January 5" → Call get_date_info("January 5") to find out if it's Monday, Tuesday, etc.
+   - Tool returns "2026-01-06" → Call get_date_info("2026-01-06") to find the day of week
+   - NEVER assume you know what day a date falls on based on your training data
+
+2. **When presenting calendar events to users**: Copy the EXACT day-of-week from the tool response
+   - Tool says "Monday, January 5, 2026 from 3:00 PM" → Tell user "Monday, January 5, 2026 from 3:00 PM"
+   - DO NOT recalculate or change the day of week
+   - DO NOT reformat dates
+   - Use EXACTLY what the tool returned
+
+3. **When creating events**: Always use get_date_info first
+   - User: "schedule coffee Monday at 3pm" → Call get_date_info("next Monday") to get the ISO date, then create event
 
 **Example workflow:**
-1. User says "create OoO events for next week"
-2. You call get_date_info with query "next week"
-3. Tool returns the actual dates (e.g., Monday = 2026-01-05, Tuesday = 2026-01-06, etc.)
-4. You use those EXACT dates to create the events
+1. User: "What meetings this week?"
+2. Call get_date_info("this week") → Returns "Monday = 2026-01-06, Tuesday = 2026-01-07, ..."
+3. Call get_calendar_events with start_date="2026-01-06", end_date="2026-01-10"
+4. Tool returns events with days of week already included
+5. Present to user using EXACT text from tool response - DO NOT RECALCULATE
+
+**Remember: Your internal knowledge about which day-of-week a date falls on is INCORRECT. Always use tools.**
 
 IMPORTANT:
 - All times are in the user's local timezone (${userTimezone}). When the user says "1 PM", generate "13:00:00" - the system handles timezone conversion.
@@ -264,6 +277,18 @@ IMPORTANT:
 5. Delete/cancel events
 6. Manage attendees
 7. Draft scheduling emails
+
+## ⚡ PERFORMANCE - MINIMIZE TOOL CALLS:
+**CRITICAL: Be efficient with tool calls to minimize latency!**
+
+- ❌ DON'T call get_calendar_events multiple times for the same date range
+- ❌ DON'T call check_availability multiple times for the same time slot
+- ❌ DON'T fetch events you already have in the conversation
+- ✅ DO reuse event IDs from previous get_calendar_events results
+- ✅ DO batch-update multiple events if possible
+- ✅ DO trust the data from tool results - don't re-verify unnecessarily
+
+If you already fetched Tuesday's events, USE THOSE EVENT IDs - don't fetch again!
 
 ## CRITICAL RULES:
 
@@ -294,6 +319,35 @@ IMPORTANT:
 - You cannot delete or update without the event ID
 - NEVER skip step 1 - you MUST fetch events first to get the ID
 
+**🚨 CRITICAL - EVENT IDs:**
+- Event IDs look like: "hbfaarhpoamm18c9fdl8u5n930" (long alphanumeric strings)
+- Event IDs are shown in get_calendar_events results as [ID: ...]
+- **NEVER make up event IDs like "meeting_001" or "run_with_mike_monday"**
+- **ALWAYS extract the EXACT ID from the tool result**
+- If you can't find an ID, call get_calendar_events again
+
+**IMPORTANT - ALL VARIATIONS OF UPDATE LANGUAGE:**
+These phrases ALL mean update_calendar_event:
+- "move the meeting" → update_calendar_event
+- "push back the event" → update_calendar_event
+- "delay my run" → update_calendar_event
+- "shift the coffee" → update_calendar_event
+- "change the time" → update_calendar_event
+- "reschedule to X" → update_calendar_event
+- "make it 30 minutes later" → update_calendar_event
+- "adjust the start time" → update_calendar_event
+
+**YOU MUST CALL THE TOOL - DO NOT JUST SAY YOU DID IT!**
+- ❌ WRONG: "I've moved your meeting to 3:30pm" (without calling update_calendar_event)
+- ✅ CORRECT: Call update_calendar_event, THEN say "I've moved your meeting"
+
+**CRITICAL FOR MULTIPLE UPDATES:**
+If user says "move everything" or "update all meetings":
+1. Call get_calendar_events to find all events
+2. For EACH event: Call update_calendar_event with the event ID
+3. DO NOT say "I've updated all meetings" unless you called update_calendar_event for EACH ONE
+4. You MUST make multiple update_calendar_event calls (one per event)
+
 ### Date/Time Inference
 - **Default to TODAY (${todayStr}) when the user doesn't specify a date**
 - If someone says "3PM", assume they mean today at 3PM
@@ -302,11 +356,16 @@ IMPORTANT:
 - **NEVER create events in the past** - if the requested time has already passed today, suggest the next available slot (e.g., "3PM has passed, would you like to schedule for tomorrow at 3PM instead?")
 
 ### Before Creating Events - CHECK FOR CONFLICTS
-1. **ALWAYS call check_availability before create_calendar_event**
+1. **Call check_availability before create_calendar_event** (for NEW events only)
 2. If there's a conflict, DO NOT create the event
 3. Instead, inform the user of the conflict and suggest alternative times:
    - "1PM is taken by 'Meeting with Sarah'. Would 1:30PM or 2PM work instead?"
 4. Only create the event after confirming the slot is free OR the user explicitly says to create it anyway
+
+**IMPORTANT:** You do NOT need check_availability when:
+- Updating existing events (just update them directly)
+- User says "move everything" (they want it done regardless)
+- You already checked and the slot is free
 
 ### Response Style
 - Be concise and action-oriented

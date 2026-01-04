@@ -2,30 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAnthropicClient } from '@/lib/anthropic/client'
 import { calendarTools, getSystemPrompt } from '@/lib/anthropic/tools'
 import { getValidAccessToken, getSession } from '@/lib/auth/session'
-import { getCalendarEvents, getCalendarStats, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, addEventAttendee, removeEventAttendee } from '@/lib/google/calendar'
-import { CLAUDE_MODEL, CLAUDE_MAX_TOKENS, USER_TIMEZONE } from '@/lib/constants'
-import {
-  parseInUserTimezone,
-  isTimeInPast,
-  formatTimeInUserTimezone,
-  formatDateInUserTimezone,
-  formatDateTimeInUserTimezone,
-  addDaysInUserTimezone,
-  startOfDayInUserTimezone,
-  endOfDayInUserTimezone
-} from '@/lib/utils/timezone'
-import type { UpdateEventData } from '@/lib/types/calendar'
+import { CLAUDE_MODEL, CLAUDE_MAX_TOKENS, MAX_RETRIES } from '@/lib/constants'
+import { executeToolCall, type ToolExecutionResult } from '@/lib/chat/tool-executor'
+import { validateToolCall, getCurrentDateContext } from '@/lib/chat/date-enforcer'
+import { validateEventDate, clearVerificationCache } from '@/lib/chat/date-validator'
+import { detectAction, validateActionCompleted } from '@/lib/chat/action-detector'
 import type { MessageParam, ContentBlock, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages'
-import * as chrono from 'chrono-node'
 
 interface ChatRequest {
   message: string
   history?: { role: 'user' | 'assistant'; content: string }[]
-}
-
-interface ToolExecutionResult {
-  content: string
-  modifiedEvents: boolean
 }
 
 function getToolStatusMessage(toolName: string): string {
@@ -42,375 +28,6 @@ function getToolStatusMessage(toolName: string): string {
     'draft_email': 'Drafting email...',
   }
   return messages[toolName] || `Executing ${toolName}...`
-}
-
-function getDateInfo(query: string): string {
-  const queryLower = query.toLowerCase()
-  const now = new Date()
-
-  // Helper functions
-  const getDayName = (date: Date): string => {
-    return date.toLocaleDateString('en-US', { weekday: 'long', timeZone: USER_TIMEZONE })
-  }
-
-  const formatDate = (date: Date): string => {
-    return date.toLocaleDateString('en-CA', { timeZone: USER_TIMEZONE }) // YYYY-MM-DD
-  }
-
-  const getDayOfWeek = (date: Date): number => {
-    const dayStr = date.toLocaleDateString('en-US', { weekday: 'short', timeZone: USER_TIMEZONE })
-    const dayMap: Record<string, number> = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 }
-    return dayMap[dayStr] || 0
-  }
-
-  const formatBusinessWeek = (startMonday: Date): string => {
-    const dates = []
-    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-    for (let i = 0; i < 5; i++) {
-      const date = addDaysInUserTimezone(startMonday, i)
-      dates.push(`${dayNames[i]} = ${formatDate(date)}`)
-    }
-    return dates.join('\n')
-  }
-
-  // Special handling for "this week" / "upcoming week" / "coming week"
-  if (queryLower.match(/\b(this|upcoming|coming)\s+week\b/)) {
-    const currentDay = getDayOfWeek(now)
-    let monday: Date
-
-    if (currentDay === 0) {
-      monday = addDaysInUserTimezone(now, 1)
-    } else if (currentDay === 6) {
-      monday = addDaysInUserTimezone(now, 2)
-    } else {
-      const daysSinceMonday = currentDay - 1
-      monday = addDaysInUserTimezone(now, -daysSinceMonday)
-    }
-
-    const friday = addDaysInUserTimezone(monday, 4)
-
-    return `This week (business days):
-${formatBusinessWeek(monday)}
-
-⚠️ TO GET CALENDAR EVENTS FOR THIS WEEK, USE THESE EXACT DATES:
-start_date: "${formatDate(monday)}"
-end_date: "${formatDate(friday)}"`
-  }
-
-  // Special handling for "next week"
-  if (queryLower.match(/\bnext\s+week\b/)) {
-    const currentDay = getDayOfWeek(now)
-    const daysUntilNextMonday = currentDay === 0 ? 1 : 8 - currentDay
-    const nextMonday = addDaysInUserTimezone(now, daysUntilNextMonday)
-    const nextFriday = addDaysInUserTimezone(nextMonday, 4)
-
-    return `Next week (business days):
-${formatBusinessWeek(nextMonday)}
-
-⚠️ TO GET CALENDAR EVENTS FOR NEXT WEEK, USE THESE EXACT DATES:
-start_date: "${formatDate(nextMonday)}"
-end_date: "${formatDate(nextFriday)}"`
-  }
-
-  // For everything else, use chrono for natural language parsing
-  const parsed = chrono.parse(query, now)
-
-  if (parsed.length > 0) {
-    const result = parsed[0]
-    const startDate = result.start.date()
-
-    // Check if it's a range
-    if (result.end) {
-      const endDate = result.end.date()
-      return `Date range: ${formatDate(startDate)} to ${formatDate(endDate)}`
-    }
-
-    // Single date
-    return `${getDayName(startDate)}, ${formatDate(startDate)}`
-  }
-
-  // Fallback to current date
-  return `Current date: ${getDayName(now)}, ${formatDate(now)}`
-}
-
-async function executeToolCall(
-  toolName: string,
-  toolInput: Record<string, unknown>,
-  accessToken: string
-): Promise<ToolExecutionResult> {
-  try {
-    switch (toolName) {
-      case 'get_date_info': {
-        const query = toolInput.query as string
-        const result = getDateInfo(query)
-        return {
-          content: result,
-          modifiedEvents: false,
-        }
-      }
-
-      case 'get_calendar_events': {
-        // VALIDATION: Reject relative date terms - force use of get_date_info first
-        const startDateStr = (toolInput.start_date as string)?.toLowerCase() || ''
-        const endDateStr = (toolInput.end_date as string)?.toLowerCase() || ''
-        const relativeDatePattern = /\b(next|this|last|upcoming|coming|week|monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|yesterday)\b/
-
-        if (relativeDatePattern.test(startDateStr) || relativeDatePattern.test(endDateStr)) {
-          return {
-            content: '❌ ERROR: Cannot use relative date terms like "next week", "this week", "Monday", etc. in get_calendar_events.\n\n✅ REQUIRED: First call get_date_info tool with your relative date query (e.g., "next week", "this Monday") to get exact ISO dates, THEN call get_calendar_events with those exact dates.',
-            modifiedEvents: false,
-          }
-        }
-
-        // Parse dates with proper handling for date-only strings
-        let startDate: Date
-        let endDate: Date
-
-        if (toolInput.start_date) {
-          const dateStr = toolInput.start_date as string
-          // If it's just a date (no time), set to start of day in user's timezone
-          if (dateStr.length <= 10) {
-            startDate = parseInUserTimezone(dateStr + 'T00:00:00')
-          } else {
-            startDate = parseInUserTimezone(dateStr)
-          }
-        } else {
-          startDate = startOfDayInUserTimezone(new Date())
-        }
-
-        if (toolInput.end_date) {
-          const dateStr = toolInput.end_date as string
-          // If it's just a date (no time), set to end of day in user's timezone
-          if (dateStr.length <= 10) {
-            endDate = parseInUserTimezone(dateStr + 'T23:59:59')
-          } else {
-            endDate = parseInUserTimezone(dateStr)
-          }
-        } else {
-          endDate = addDaysInUserTimezone(new Date(), 7)
-        }
-
-        const events = await getCalendarEvents(accessToken, startDate, endDate)
-
-        if (events.length === 0) {
-          return {
-            content: 'No events found in the specified date range.',
-            modifiedEvents: false,
-          }
-        }
-
-        const eventSummaries = events.map((e) => {
-          if (!e.start.dateTime || !e.end.dateTime) {
-            // All-day event
-            return `- ${e.summary} (All day)${e.attendees?.length ? ` with ${e.attendees.length} attendee(s)` : ''} [ID: ${e.id}]`
-          }
-          const start = new Date(e.start.dateTime)
-          const end = new Date(e.end.dateTime)
-          // Format date all at once instead of 4 separate calls
-          const fullDate = start.toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric',
-            timeZone: USER_TIMEZONE
-          })
-          const attendeeList = e.attendees?.map((a) => a.displayName || a.email).join(', ')
-          return `- ${e.summary} on ${fullDate} from ${formatTimeInUserTimezone(start)} to ${formatTimeInUserTimezone(end)}${attendeeList ? ` with ${attendeeList}` : ''} [ID: ${e.id}]`
-        })
-
-        const responseContent = `Found ${events.length} events:\n${eventSummaries.join('\n')}\n\n⚠️ CRITICAL: When presenting these events to the user, use the EXACT day of week and dates shown above. DO NOT recalculate or reformat them.\n\nNote: Use the event ID to update, delete, or manage attendees.`
-
-        return {
-          content: responseContent,
-          modifiedEvents: false,
-        }
-      }
-
-      case 'check_availability': {
-        const startTime = parseInUserTimezone(toolInput.start_time as string)
-        const endTime = parseInUserTimezone(toolInput.end_time as string)
-
-        // Get events that might overlap with the requested time
-        const dayStart = startOfDayInUserTimezone(startTime)
-        const dayEnd = endOfDayInUserTimezone(startTime)
-
-        const events = await getCalendarEvents(accessToken, dayStart, dayEnd)
-
-        // Check for conflicts
-        const conflicts = events.filter((event) => {
-          if (!event.start.dateTime || !event.end.dateTime) {
-            // All-day event - consider it a conflict for the whole day
-            return true
-          }
-          const eventStart = new Date(event.start.dateTime)
-          const eventEnd = new Date(event.end.dateTime)
-
-          // Check if there's any overlap
-          return startTime < eventEnd && endTime > eventStart
-        })
-
-        if (conflicts.length === 0) {
-          return {
-            content: `✅ The time slot ${formatTimeInUserTimezone(startTime)} - ${formatTimeInUserTimezone(endTime)} is AVAILABLE. You can proceed to create the event.`,
-            modifiedEvents: false,
-          }
-        }
-
-        const conflictDetails = conflicts.map((c) => {
-          const cStart = c.start.dateTime ? formatTimeInUserTimezone(new Date(c.start.dateTime)) : 'All day'
-          const cEnd = c.end.dateTime ? formatTimeInUserTimezone(new Date(c.end.dateTime)) : ''
-          return `- "${c.summary}" (${cStart}${cEnd ? ` - ${cEnd}` : ''})`
-        }).join('\n')
-
-        // Suggest alternative times
-        const suggestedTime = new Date(Math.max(...conflicts.map(c => new Date(c.end.dateTime || dayEnd).getTime())))
-
-        return {
-          content: `⚠️ CONFLICT DETECTED: The time slot ${formatTimeInUserTimezone(startTime)} - ${formatTimeInUserTimezone(endTime)} overlaps with:\n${conflictDetails}\n\n💡 Suggested alternative: ${formatTimeInUserTimezone(suggestedTime)} (after the last conflicting event)\n\nDo NOT create the event unless the user confirms they want to schedule despite the conflict.`,
-          modifiedEvents: false,
-        }
-      }
-
-      case 'get_calendar_stats': {
-        const stats = await getCalendarStats(accessToken)
-        return {
-          content: `Calendar Statistics (This Week):
-- Total meetings: ${stats.totalEvents}
-- Total meeting time: ${stats.totalMeetingHours} hours
-- Average meetings per day: ${stats.averageMeetingsPerDay}
-- Meeting time by day: ${Object.entries(stats.meetingsByDay).map(([day, mins]) => `${day}: ${Math.round(mins / 60 * 10) / 10}h`).join(', ')}
-- Most frequent attendees: ${stats.topAttendees.map((a) => `${a.email} (${a.meetingCount} meetings)`).join(', ') || 'None'}`,
-          modifiedEvents: false,
-        }
-      }
-
-      case 'create_calendar_event': {
-        // Validate: prevent creating events in the past
-        const startTimeStr = toolInput.start_time as string
-
-        if (isTimeInPast(startTimeStr)) {
-          const startTime = parseInUserTimezone(startTimeStr)
-          const tomorrow = addDaysInUserTimezone(startTime, 1)
-          return {
-            content: `⚠️ Cannot create event in the past. The requested time (${formatDateTimeInUserTimezone(startTime)}) has already passed. Would you like to schedule for ${formatDateInUserTimezone(tomorrow)} at ${formatTimeInUserTimezone(startTime)} instead?`,
-            modifiedEvents: false,
-          }
-        }
-
-        const event = await createCalendarEvent(accessToken, {
-          summary: toolInput.title as string,
-          description: toolInput.description as string | undefined,
-          start: {
-            dateTime: toolInput.start_time as string,
-            timeZone: USER_TIMEZONE,
-          },
-          end: {
-            dateTime: toolInput.end_time as string,
-            timeZone: USER_TIMEZONE,
-          },
-          attendees: (toolInput.attendees as string[] | undefined)?.map((email) => ({ email })),
-          location: toolInput.location as string | undefined,
-        })
-
-        const eventDate = event.start.dateTime ? formatDateTimeInUserTimezone(new Date(event.start.dateTime)) : 'scheduled'
-        return {
-          content: `✅ Event created: "${event.summary}" on ${eventDate}${event.htmlLink ? `\nView in Google Calendar: ${event.htmlLink}` : ''}`,
-          modifiedEvents: true,
-        }
-      }
-
-      case 'update_calendar_event': {
-        const updateData: UpdateEventData = {
-          eventId: toolInput.event_id as string,
-        }
-
-        if (toolInput.title) updateData.summary = toolInput.title as string
-        if (toolInput.description !== undefined) updateData.description = toolInput.description as string
-        if (toolInput.location !== undefined) updateData.location = toolInput.location as string
-        if (toolInput.start_time) {
-          updateData.start = {
-            dateTime: toolInput.start_time as string,
-            timeZone: USER_TIMEZONE,
-          }
-        }
-        if (toolInput.end_time) {
-          updateData.end = {
-            dateTime: toolInput.end_time as string,
-            timeZone: USER_TIMEZONE,
-          }
-        }
-
-        const updatedEvent = await updateCalendarEvent(accessToken, updateData)
-        const updatedDate = updatedEvent.start.dateTime ? formatDateTimeInUserTimezone(new Date(updatedEvent.start.dateTime)) : 'scheduled'
-        return {
-          content: `✅ Event updated: "${updatedEvent.summary}" on ${updatedDate}${updatedEvent.htmlLink ? `\nView in Google Calendar: ${updatedEvent.htmlLink}` : ''}`,
-          modifiedEvents: true,
-        }
-      }
-
-      case 'delete_calendar_event': {
-        const eventId = toolInput.event_id as string
-        const result = await deleteCalendarEvent(accessToken, eventId)
-        return {
-          content: `✅ Event "${result.eventTitle}" deleted successfully.`,
-          modifiedEvents: true,
-        }
-      }
-
-      case 'add_attendee': {
-        const eventId = toolInput.event_id as string
-        const email = toolInput.email as string
-        const updatedEvent = await addEventAttendee(accessToken, eventId, email)
-        return {
-          content: `✅ Added ${email} to "${updatedEvent.summary}". Current attendees: ${updatedEvent.attendees?.map(a => a.email).join(', ') || 'none'}${updatedEvent.htmlLink ? `\nView in Google Calendar: ${updatedEvent.htmlLink}` : ''}`,
-          modifiedEvents: true,
-        }
-      }
-
-      case 'remove_attendee': {
-        const eventId = toolInput.event_id as string
-        const email = toolInput.email as string
-        const updatedEvent = await removeEventAttendee(accessToken, eventId, email)
-        return {
-          content: `✅ Removed ${email} from "${updatedEvent.summary}". Current attendees: ${updatedEvent.attendees?.map(a => a.email).join(', ') || 'none'}${updatedEvent.htmlLink ? `\nView in Google Calendar: ${updatedEvent.htmlLink}` : ''}`,
-          modifiedEvents: true,
-        }
-      }
-
-      case 'draft_email': {
-        const recipients = toolInput.to as string[]
-        const subject = toolInput.subject as string
-        const context = toolInput.context as string
-        const tone = (toolInput.tone as string) || 'friendly'
-
-        // Return a compose prompt for Claude to write the actual email
-        return {
-          content: `📧 COMPOSE EMAIL REQUEST
-═══════════════════════════════════
-
-To: ${recipients.join(', ')}
-Subject: ${subject}
-Tone: ${tone}
-Context: ${context}
-
-Now compose the full email draft for the user to copy. Include proper greeting, body, and sign-off based on the ${tone} tone.`,
-          modifiedEvents: false,
-        }
-      }
-
-      default:
-        return {
-          content: `Unknown tool: ${toolName}`,
-          modifiedEvents: false,
-        }
-    }
-  } catch (error) {
-    console.error(`[Chat] Error executing tool ${toolName}:`, error)
-    return {
-      content: `Error executing ${toolName}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      modifiedEvents: false,
-    }
-  }
 }
 
 export async function POST(request: NextRequest) {
@@ -456,11 +73,25 @@ export async function POST(request: NextRequest) {
           let eventsWereModified = false
           let currentMessages = [...messages]
 
+          // Clear date verification cache for new conversation
+          // (Note: In production, you might want conversation-scoped caching)
+          clearVerificationCache()
+
+          // Detect what action the user is requesting
+          const requestedAction = detectAction(message)
+          const toolsCalled: string[] = []
+          let lastToolResult = ''
+          let retryCount = 0
+
+          // Inject current date/time context (MCP-like approach)
+          const dateContext = getCurrentDateContext()
+          const systemPrompt = `${getSystemPrompt()}\n\n${dateContext}`
+
           // Initial API call - force tool use for calendar-related questions
           const initialStream = client.messages.stream({
             model: CLAUDE_MODEL,
             max_tokens: CLAUDE_MAX_TOKENS,
-            system: getSystemPrompt(),
+            system: systemPrompt,
             tools: calendarTools,
             messages: currentMessages,
             // Force Claude to use at least one tool for calendar questions
@@ -494,11 +125,50 @@ export async function POST(request: NextRequest) {
                 // Send status message before executing tool
                 send({ type: 'status', message: getToolStatusMessage(toolUse.name) })
 
+                // VALIDATE tool call inputs (architectural enforcement)
+                const validation = validateToolCall(
+                  toolUse.name,
+                  toolUse.input as Record<string, unknown>
+                )
+
+                if (!validation.valid) {
+                  // Return validation error to Claude so it can retry with correct format
+                  toolResults.push({
+                    type: 'tool_result' as const,
+                    tool_use_id: toolUse.id,
+                    content: `❌ VALIDATION ERROR: ${validation.error}`,
+                    is_error: true,
+                  })
+                  continue
+                }
+
+                // Additional validation for event creation - ensure dates are verified
+                if (toolUse.name === 'create_calendar_event') {
+                  const startTime = (toolUse.input as Record<string, unknown>).start_time as string
+                  const dateValidation = validateEventDate(startTime, message)
+
+                  if (!dateValidation.valid) {
+                    toolResults.push({
+                      type: 'tool_result' as const,
+                      tool_use_id: toolUse.id,
+                      content: `❌ DATE VALIDATION ERROR: ${dateValidation.error}`,
+                      is_error: true,
+                    })
+                    continue
+                  }
+                }
+
                 const result = await executeToolCall(
                   toolUse.name,
                   toolUse.input as Record<string, unknown>,
                   accessToken
                 )
+
+                // Track which tools were called
+                toolsCalled.push(toolUse.name)
+
+                // Track last tool result for validation hints
+                lastToolResult = result.content
 
                 // Track if any tool modified events
                 if (result.modifiedEvents) {
@@ -538,7 +208,7 @@ export async function POST(request: NextRequest) {
             const nextStream = client.messages.stream({
               model: CLAUDE_MODEL,
               max_tokens: CLAUDE_MAX_TOKENS,
-              system: getSystemPrompt(),
+              system: systemPrompt, // Use same date-context-injected prompt
               tools: calendarTools,
               messages: currentMessages,
             })
@@ -553,6 +223,129 @@ export async function POST(request: NextRequest) {
             }
 
             response = await nextStream.finalMessage()
+          }
+
+          // CRITICAL VALIDATION: Ensure required tools were called
+          const actionValidation = validateActionCompleted(
+            requestedAction,
+            toolsCalled,
+            message,
+            { lastToolResult }
+          )
+
+          if (!actionValidation.valid && retryCount < MAX_RETRIES) {
+            retryCount++
+
+            // Force Claude to retry with the required tools
+            currentMessages.push({ role: 'assistant', content: response.content })
+            currentMessages.push({
+              role: 'user',
+              content: [
+                {
+                  type: 'text' as const,
+                  text: `🚨 CRITICAL ERROR - YOU DID NOT COMPLETE THE USER'S REQUEST:\n\n${actionValidation.error}\n\nYou MUST call the required tools to actually perform the action. Do NOT just say you did it - actually DO it by calling the appropriate tool.`
+                }
+              ]
+            })
+
+            // Force tool use on retry
+            const retryStream = client.messages.stream({
+              model: CLAUDE_MODEL,
+              max_tokens: CLAUDE_MAX_TOKENS,
+              system: systemPrompt,
+              tools: calendarTools,
+              messages: currentMessages,
+              tool_choice: { type: 'any' as const }, // Force tool use
+            })
+
+            // Stream the retry response
+            for await (const event of retryStream) {
+              if (event.type === 'content_block_delta') {
+                if (event.delta.type === 'text_delta') {
+                  send({ type: 'text_delta', content: event.delta.text })
+                }
+              }
+            }
+
+            const retryResponse = await retryStream.finalMessage()
+
+            // Handle any tool calls from retry (simplified - just execute them)
+            if (retryResponse.stop_reason === 'tool_use') {
+              const retryToolUseBlocks = retryResponse.content.filter(
+                (block): block is Extract<ContentBlock, { type: 'tool_use' }> => block.type === 'tool_use'
+              )
+
+              const retryToolResults: ToolResultBlockParam[] = []
+
+              for (const toolUse of retryToolUseBlocks) {
+                try {
+                  send({ type: 'status', message: getToolStatusMessage(toolUse.name) })
+
+                  const result = await executeToolCall(
+                    toolUse.name,
+                    toolUse.input as Record<string, unknown>,
+                    accessToken
+                  )
+
+                  // CRITICAL: Track retry tool calls too
+                  toolsCalled.push(toolUse.name)
+
+                  // Track result for validation hints
+                  lastToolResult = result.content
+
+                  if (result.modifiedEvents) {
+                    eventsWereModified = true
+                  }
+
+                  retryToolResults.push({
+                    type: 'tool_result' as const,
+                    tool_use_id: toolUse.id,
+                    content: result.content,
+                  })
+                } catch (error) {
+                  console.error(`[Chat API] Retry tool execution failed:`, error)
+                  retryToolResults.push({
+                    type: 'tool_result' as const,
+                    tool_use_id: toolUse.id,
+                    content: `Error: ${error instanceof Error ? error.message : 'Tool execution failed'}`,
+                    is_error: true,
+                  })
+                }
+              }
+
+              // Get final response after retry tools
+              currentMessages.push({ role: 'assistant', content: retryResponse.content })
+              currentMessages.push({ role: 'user', content: retryToolResults })
+
+              const finalStream = client.messages.stream({
+                model: CLAUDE_MODEL,
+                max_tokens: CLAUDE_MAX_TOKENS,
+                system: systemPrompt,
+                tools: calendarTools,
+                messages: currentMessages,
+              })
+
+              for await (const event of finalStream) {
+                if (event.type === 'content_block_delta') {
+                  if (event.delta.type === 'text_delta') {
+                    send({ type: 'text_delta', content: event.delta.text })
+                  }
+                }
+              }
+
+              const finalResponse = await finalStream.finalMessage()
+
+              // Validate the retry actually fixed the issue
+              const retryValidation = validateActionCompleted(
+                requestedAction,
+                toolsCalled,
+                message,
+                { lastToolResult }
+              )
+              if (!retryValidation.valid) {
+                // Don't retry again - we already hit max retries
+              }
+            }
           }
 
           // Send done message with metadata
